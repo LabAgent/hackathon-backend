@@ -7,3 +7,4 @@ export * from './refresh-token.dto';
 export * from './forgot-password.dto';
 export * from './resend-verification.dto';
 export * from './mfa-backup-code-verify.dto';
+export * from './verify-email.dto';

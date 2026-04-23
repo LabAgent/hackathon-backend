@@ -8,11 +8,12 @@
   <div style="background: #f4f4f4; padding: 30px; border-radius: 10px;">
     <h2 style="color: #2c3e50;">Verify Your Email Address</h2>
     <p>Thank you for signing up with {{appName}}!</p>
-    <p>Please click the button below to verify your email address:</p>
-    <a href="{{verificationUrl}}" style="display: inline-block; padding: 12px 24px; background: #27ae60; color: #fff; text-decoration: none; border-radius: 5px; margin: 10px 0;">Verify Email</a>
-    <p>If the button doesn't work, copy and paste the following link into your browser:</p>
-    <p style="word-break: break-all; color: #3498db;">{{verificationUrl}}</p>
-    <p>This link will expire in 24 hours.</p>
+    <p>Your verification code is:</p>
+    <div style="background: #fff; border: 2px dashed #27ae60; border-radius: 8px; padding: 20px; text-align: center; margin: 20px 0;">
+      <span style="font-size: 36px; font-weight: bold; letter-spacing: 8px; color: #2c3e50;">{{code}}</span>
+    </div>
+    <p>Enter this code in the app to verify your email address.</p>
+    <p>This code will expire in 24 hours.</p>
     <p>If you did not create an account, please ignore this email.</p>
     <p>Best regards,<br>The {{appName}} Team</p>
   </div>

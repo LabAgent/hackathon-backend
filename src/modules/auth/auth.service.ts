@@ -30,6 +30,7 @@ import {
   ResetPasswordDto,
   ResendVerificationDto,
   MfaBackupCodeVerifyDto,
+  VerifyEmailDto,
 } from './dto';
 
 @Injectable()
@@ -51,6 +52,10 @@ export class AuthService {
     private mfaService: MfaService,
   ) {}
 
+  private generateCode(): string {
+    return String(Math.floor(100000 + Math.random() * 900000));
+  }
+
   async register(dto: RegisterDto) {
     const existingUser = await this.userRepository.findOne({
       where: { email: dto.email },
@@ -68,33 +73,36 @@ export class AuthService {
     });
     await this.userRepository.save(user);
 
-    const verificationToken = randomUUID();
+    const code = this.generateCode();
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
     const tokenEntity = this.emailVerificationRepository.create({
-      token: verificationToken,
+      code,
       userId: user.id,
       expiresAt,
     });
     await this.emailVerificationRepository.save(tokenEntity);
 
-    await this.emailService.sendVerificationEmail(user.email, verificationToken);
+    await this.emailService.sendVerificationEmail(user.email, code);
 
     return {
-      message: 'Registration successful. Please check your email to verify your account.',
+      message: 'Registration successful. Please check your email for the verification code.',
       userId: user.id,
     };
   }
 
-  async verifyEmail(token: string) {
+  async verifyEmail(dto: VerifyEmailDto) {
     const verificationToken = await this.emailVerificationRepository.findOne({
-      where: { token },
+      where: { code: dto.code },
       relations: ['user'],
     });
     if (!verificationToken) {
-      throw new BadRequestException('Invalid verification token');
+      throw new BadRequestException('Invalid verification code');
+    }
+    if (verificationToken.user.email !== dto.email) {
+      throw new BadRequestException('Invalid verification code');
     }
     if (verificationToken.expiresAt < new Date()) {
-      throw new BadRequestException('Verification token has expired');
+      throw new BadRequestException('Verification code has expired');
     }
     if (verificationToken.user.isVerified) {
       throw new BadRequestException('Email already verified');
@@ -126,19 +134,19 @@ export class AuthService {
 
     await this.emailVerificationRepository.delete({ userId: user.id });
 
-    const verificationToken = randomUUID();
+    const code = this.generateCode();
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
     await this.emailVerificationRepository.save(
       this.emailVerificationRepository.create({
-        token: verificationToken,
+        code,
         userId: user.id,
         expiresAt,
       }),
     );
 
-    await this.emailService.sendVerificationEmail(user.email, verificationToken);
+    await this.emailService.sendVerificationEmail(user.email, code);
 
-    return { message: 'Verification email resent successfully.' };
+    return { message: 'Verification code resent successfully.' };
   }
 
   async login(dto: LoginDto) {
@@ -430,37 +438,40 @@ export class AuthService {
       where: { email: dto.email },
     });
     if (!user) {
-      return { message: 'If an account with this email exists, a reset link has been sent.' };
+      return { message: 'If an account with this email exists, a reset code has been sent.' };
     }
 
-    const token = randomUUID();
+    const code = this.generateCode();
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
     await this.passwordResetRepository.save(
       this.passwordResetRepository.create({
-        token,
+        code,
         userId: user.id,
         expiresAt,
       }),
     );
 
-    await this.emailService.sendPasswordResetEmail(user.email, token);
+    await this.emailService.sendPasswordResetEmail(user.email, code);
 
-    return { message: 'If an account with this email exists, a reset link has been sent.' };
+    return { message: 'If an account with this email exists, a reset code has been sent.' };
   }
 
   async resetPassword(dto: ResetPasswordDto) {
     const resetToken = await this.passwordResetRepository.findOne({
-      where: { token: dto.token },
+      where: { code: dto.code },
       relations: ['user'],
     });
     if (!resetToken) {
-      throw new BadRequestException('Invalid reset token');
+      throw new BadRequestException('Invalid reset code');
+    }
+    if (resetToken.user.email !== dto.email) {
+      throw new BadRequestException('Invalid reset code');
     }
     if (resetToken.used) {
-      throw new BadRequestException('Reset token has already been used');
+      throw new BadRequestException('Reset code has already been used');
     }
     if (resetToken.expiresAt < new Date()) {
-      throw new BadRequestException('Reset token has expired');
+      throw new BadRequestException('Reset code has expired');
     }
 
     const passwordHash = await bcrypt.hash(dto.password, 12);

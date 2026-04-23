@@ -1,9 +1,7 @@
 import {
   Controller,
   Post,
-  Get,
   Body,
-  Query,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -14,7 +12,6 @@ import {
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
-  ApiQuery,
 } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { AuthService } from './auth.service';
@@ -29,6 +26,7 @@ import {
   ResetPasswordDto,
   ResendVerificationDto,
   MfaBackupCodeVerifyDto,
+  VerifyEmailDto,
 } from './dto';
 import { CurrentUser, Public } from '../../common/decorators';
 
@@ -47,13 +45,13 @@ export class AuthController {
   }
 
   @Public()
-  @Get('verify-email')
-  @ApiOperation({ summary: 'Verify email address' })
-  @ApiQuery({ name: 'token', required: true })
+  @Post('verify-email')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify email address with code' })
   @ApiResponse({ status: 200, description: 'Email verified successfully' })
-  @ApiResponse({ status: 400, description: 'Invalid or expired token' })
-  async verifyEmail(@Query('token') token: string) {
-    return this.authService.verifyEmail(token);
+  @ApiResponse({ status: 400, description: 'Invalid or expired code' })
+  async verifyEmail(@Body() dto: VerifyEmailDto) {
+    return this.authService.verifyEmail(dto);
   }
 
   @Public()
@@ -176,7 +174,7 @@ export class AuthController {
   @Public()
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Reset password with token' })
+  @ApiOperation({ summary: 'Reset password with code' })
   @ApiResponse({ status: 200, description: 'Password reset successfully' })
   async resetPassword(@Body() dto: ResetPasswordDto) {
     return this.authService.resetPassword(dto);

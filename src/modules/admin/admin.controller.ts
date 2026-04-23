@@ -18,11 +18,12 @@ import {
 import { AdminService } from './admin.service';
 import { AdminUpdateUserDto, ListUsersQueryDto, LockUserDto } from './dto';
 import { Roles } from '../../common/decorators';
+import { RolesGuard } from '../../common/guards/roles.guard';
 import { UserRole } from '../../entities/user.entity';
 
 @ApiTags('Admin')
 @ApiBearerAuth()
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), RolesGuard)
 @Roles(UserRole.ADMIN)
 @Controller('admin')
 export class AdminController {

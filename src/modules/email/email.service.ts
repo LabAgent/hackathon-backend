@@ -11,15 +11,14 @@ export class EmailService {
     private configService: AppConfigService,
   ) {}
 
-  async sendVerificationEmail(email: string, token: string): Promise<void> {
-    const verificationUrl = `${this.configService.url}/auth/verify-email?token=${token}`;
+  async sendVerificationEmail(email: string, code: string): Promise<void> {
     try {
       await this.mailerService.sendMail({
         to: email,
         subject: 'Verify your email address',
         template: 'verify-email',
         context: {
-          verificationUrl,
+          code,
           appName: this.configService.smtpConfig.fromName,
         },
       });
@@ -48,15 +47,14 @@ export class EmailService {
     }
   }
 
-  async sendPasswordResetEmail(email: string, token: string): Promise<void> {
-    const resetUrl = `${this.configService.url}/auth/reset-password?token=${token}`;
+  async sendPasswordResetEmail(email: string, code: string): Promise<void> {
     try {
       await this.mailerService.sendMail({
         to: email,
         subject: 'Reset your password',
         template: 'reset-password',
         context: {
-          resetUrl,
+          code,
           appName: this.configService.smtpConfig.fromName,
         },
       });
