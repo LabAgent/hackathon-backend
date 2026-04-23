@@ -153,6 +153,7 @@ export class AuthController {
     return this.authService.refreshTokens(dto);
   }
 
+  @UseGuards(AuthGuard('jwt'))
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth()
