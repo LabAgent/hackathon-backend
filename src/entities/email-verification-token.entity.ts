@@ -5,10 +5,13 @@ import {
   CreateDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { User } from './user.entity';
 
 @Entity('email_verification_tokens')
+@Index(['code', 'userId'])
+@Index(['userId'])
 export class EmailVerificationToken {
   @PrimaryGeneratedColumn('uuid')
   id: string;

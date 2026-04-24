@@ -5,10 +5,13 @@ import {
   CreateDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { User } from './user.entity';
 
 @Entity('password_resets')
+@Index(['code', 'userId'])
+@Index(['userId'])
 export class PasswordReset {
   @PrimaryGeneratedColumn('uuid')
   id: string;

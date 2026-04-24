@@ -29,6 +29,7 @@ export default registerAs('app', () => ({
     password: requireEnv('DB_PASSWORD'),
     database: process.env.DB_DATABASE || 'postgres',
     ssl: process.env.DB_SSL === 'true',
+    synchronize: process.env.DB_SYNCHRONIZE === 'true',
   },
 
   smtp: {

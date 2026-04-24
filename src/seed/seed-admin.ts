@@ -1,5 +1,5 @@
 import { DataSource } from 'typeorm';
-import * as bcrypt from 'bcryptjs';
+import * as bcrypt from 'bcrypt';
 import * as dotenv from 'dotenv';
 import { User, UserRole } from '../entities/user.entity';
 
@@ -52,7 +52,7 @@ async function seedAdmin() {
       return;
     }
 
-    const passwordHash = await bcrypt.hash(adminPassword, 12);
+    const passwordHash = await bcrypt.hash(adminPassword, 10);
     const admin = userRepository.create({
       email: adminEmail,
       passwordHash,

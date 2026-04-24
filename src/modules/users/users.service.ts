@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import * as bcrypt from 'bcryptjs';
+import * as bcrypt from 'bcrypt';
 import { User, UserRole } from '../../entities/user.entity';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { UpdateProfileDto, ChangePasswordDto } from './dto';
@@ -79,7 +79,7 @@ export class UsersService {
       throw new BadRequestException('Current password is incorrect');
     }
 
-    const newPasswordHash = await bcrypt.hash(dto.newPassword, 12);
+    const newPasswordHash = await bcrypt.hash(dto.newPassword, 10);
     await this.userRepository.update(id, { passwordHash: newPasswordHash });
 
     return { message: 'Password changed successfully' };

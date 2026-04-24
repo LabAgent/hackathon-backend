@@ -1,8 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { authenticator } from 'otplib';
 import * as QRCode from 'qrcode';
-import * as bcrypt from 'bcryptjs';
-import { randomBytes } from 'crypto';
+import { randomBytes, createHmac } from 'crypto';
 import { AppConfigService } from '../../config/app-config.service';
 
 @Injectable()
@@ -35,22 +34,18 @@ export class MfaService {
     return codes;
   }
 
-  verifyBackupCode(backupCodes: string[], code: string): number {
-    return backupCodes.findIndex((c) => c === code);
+  private hashBackupCode(code: string): string {
+    return createHmac('sha256', this.configService.jwtSecret)
+      .update(code)
+      .digest('hex');
   }
 
-  async hashBackupCodes(codes: string[]): Promise<string[]> {
-    return Promise.all(codes.map((code) => bcrypt.hash(code, 10)));
+  hashBackupCodes(codes: string[]): string[] {
+    return codes.map((code) => this.hashBackupCode(code));
   }
 
-  async verifyBackupCodeHashed(
-    hashedCodes: string[],
-    code: string,
-  ): Promise<number> {
-    for (let i = 0; i < hashedCodes.length; i++) {
-      const match = await bcrypt.compare(code, hashedCodes[i]);
-      if (match) return i;
-    }
-    return -1;
+  verifyBackupCodeHashed(hashedCodes: string[], code: string): number {
+    const hash = this.hashBackupCode(code);
+    return hashedCodes.findIndex((h) => h === hash);
   }
 }

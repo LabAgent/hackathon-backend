@@ -10,7 +10,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, MoreThan } from 'typeorm';
-import * as bcrypt from 'bcryptjs';
+import * as bcrypt from 'bcrypt';
 import { randomUUID, randomInt, createHash } from 'crypto';
 import { User, UserRole } from '../../entities/user.entity';
 import { RefreshToken } from '../../entities/refresh-token.entity';
@@ -72,7 +72,7 @@ export class AuthService {
       };
     }
 
-    const passwordHash = await bcrypt.hash(dto.password, 12);
+    const passwordHash = await bcrypt.hash(dto.password, 10);
     const user = this.userRepository.create({
       email: normalizedEmail,
       passwordHash,
@@ -90,7 +90,7 @@ export class AuthService {
     });
     await this.emailVerificationRepository.save(tokenEntity);
 
-    await this.emailService.sendVerificationEmail(user.email, code);
+    this.emailService.sendVerificationEmail(user.email, code).catch(() => {});
 
     return {
       message:
@@ -126,7 +126,7 @@ export class AuthService {
     });
     await this.emailVerificationRepository.delete(verificationToken.id);
 
-    await this.emailService.sendWelcomeEmail(user.email, user.fullName);
+    this.emailService.sendWelcomeEmail(user.email, user.fullName).catch(() => {});
 
     return { message: 'Email verified successfully. You can now log in.' };
   }
@@ -158,7 +158,7 @@ export class AuthService {
       }),
     );
 
-    await this.emailService.sendVerificationEmail(user.email, code);
+    this.emailService.sendVerificationEmail(user.email, code).catch(() => {});
 
     return {
       message:
@@ -173,7 +173,7 @@ export class AuthService {
     });
 
     if (!user) {
-      await bcrypt.hash(dto.password, 12);
+      await bcrypt.hash(dto.password, 10);
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -217,10 +217,7 @@ export class AuthService {
           failedAttempts: 0,
           lockedUntil,
         });
-        await this.emailService.sendAccountLockedEmail(
-          user.email,
-          user.fullName,
-        );
+        this.emailService.sendAccountLockedEmail(user.email, user.fullName).catch(() => {});
         throw new HttpException(
           'Account locked due to too many failed attempts',
           HttpStatus.LOCKED,
@@ -237,6 +234,7 @@ export class AuthService {
     await this.userRepository.update(user.id, {
       failedAttempts: 0,
       lockedUntil: null as any,
+      lastLogin: new Date(),
     });
 
     if (user.mfaEnabled) {
@@ -259,7 +257,6 @@ export class AuthService {
       };
     }
 
-    await this.userRepository.update(user.id, { lastLogin: new Date() });
     return this.generateTokens(user);
   }
 
@@ -317,7 +314,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid backup code');
     }
 
-    const codeIndex = await this.mfaService.verifyBackupCodeHashed(
+    const codeIndex = this.mfaService.verifyBackupCodeHashed(
       user.mfaBackupCodes,
       dto.backupCode,
     );
@@ -378,14 +375,13 @@ export class AuthService {
     }
 
     const backupCodes = this.mfaService.generateBackupCodes();
-    const hashedBackupCodes =
-      await this.mfaService.hashBackupCodes(backupCodes);
+    const hashedBackupCodes = this.mfaService.hashBackupCodes(backupCodes);
     await this.userRepository.update(userId, {
       mfaEnabled: true,
       mfaBackupCodes: hashedBackupCodes,
     });
 
-    await this.emailService.sendMfaEnabledEmail(user.email, user.fullName);
+    this.emailService.sendMfaEnabledEmail(user.email, user.fullName).catch(() => {});
 
     return {
       message: 'MFA enabled successfully',
@@ -429,8 +425,7 @@ export class AuthService {
     }
 
     const backupCodes = this.mfaService.generateBackupCodes();
-    const hashedBackupCodes =
-      await this.mfaService.hashBackupCodes(backupCodes);
+    const hashedBackupCodes = this.mfaService.hashBackupCodes(backupCodes);
     await this.userRepository.update(userId, {
       mfaBackupCodes: hashedBackupCodes,
     });
@@ -508,7 +503,7 @@ export class AuthService {
       }),
     );
 
-    await this.emailService.sendPasswordResetEmail(user.email, code);
+    this.emailService.sendPasswordResetEmail(user.email, code).catch(() => {});
 
     return {
       message:
@@ -548,7 +543,7 @@ export class AuthService {
       );
     }
 
-    const passwordHash = await bcrypt.hash(dto.password, 12);
+    const passwordHash = await bcrypt.hash(dto.password, 10);
     await this.userRepository.update(resetToken.userId, { passwordHash });
     await this.passwordResetRepository.update(resetToken.id, { used: true });
 

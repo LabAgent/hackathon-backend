@@ -38,7 +38,7 @@ function getSslConfig(sslEnabled: boolean) {
         database: configService.dbConfig.database,
         ssl: getSslConfig(configService.dbConfig.ssl),
         entities: [__dirname + '/entities/*.entity{.ts,.js}'],
-        synchronize: true,
+        synchronize: configService.dbConfig.synchronize,
         autoLoadEntities: true,
       }),
     }),
