@@ -22,13 +22,20 @@ export class AllExceptionsFilter implements ExceptionFilter {
     if (exception instanceof HttpException) {
       status = exception.getStatus();
       const exceptionResponse = exception.getResponse();
-      message =
-        typeof exceptionResponse === 'string'
-          ? exceptionResponse
-          : (exceptionResponse as any).message || exception.getResponse();
-
-      if (Array.isArray(message)) {
-        message = message.join(', ');
+      if (typeof exceptionResponse === 'string') {
+        message = exceptionResponse;
+      } else if (
+        typeof exceptionResponse === 'object' &&
+        exceptionResponse !== null
+      ) {
+        const resp = exceptionResponse as Record<string, unknown>;
+        if (Array.isArray(resp.message)) {
+          message = resp.message.join(', ');
+        } else if (typeof resp.message === 'string') {
+          message = resp.message;
+        } else {
+          message = exception.message || 'An error occurred';
+        }
       }
     } else {
       this.logger.error('Unhandled exception:', exception);

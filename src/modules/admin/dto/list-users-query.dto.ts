@@ -1,6 +1,14 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsNumber, Min, IsString } from 'class-validator';
+import {
+  IsOptional,
+  IsNumber,
+  Min,
+  Max,
+  IsString,
+  IsEnum,
+} from 'class-validator';
 import { Type } from 'class-transformer';
+import { UserRole } from '../../../entities/user.entity';
 
 export class ListUsersQueryDto {
   @ApiPropertyOptional({ default: 1 })
@@ -15,6 +23,7 @@ export class ListUsersQueryDto {
   @Type(() => Number)
   @IsNumber()
   @Min(1)
+  @Max(100)
   limit?: number = 10;
 
   @ApiPropertyOptional()
@@ -22,8 +31,8 @@ export class ListUsersQueryDto {
   @IsString()
   search?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ enum: UserRole })
   @IsOptional()
-  @IsString()
-  role?: string;
+  @IsEnum(UserRole)
+  role?: UserRole;
 }

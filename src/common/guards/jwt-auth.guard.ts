@@ -34,7 +34,13 @@ export class JwtAuthGuard implements CanActivate {
 
     const token = authHeader.startsWith('Bearer ')
       ? authHeader.substring(7)
-      : authHeader;
+      : null;
+
+    if (!token) {
+      throw new UnauthorizedException(
+        'Invalid authorization header format. Expected: Bearer <token>',
+      );
+    }
 
     try {
       const payload = await this.jwtService.verifyAsync(token, {
@@ -42,9 +48,7 @@ export class JwtAuthGuard implements CanActivate {
       });
 
       if (payload.mfaPending) {
-        throw new UnauthorizedException(
-          'MFA verification required',
-        );
+        throw new UnauthorizedException('MFA verification required');
       }
 
       request.user = payload;

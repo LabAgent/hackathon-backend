@@ -11,6 +11,12 @@ export class EmailService {
     private configService: AppConfigService,
   ) {}
 
+  private redactEmail(email: string): string {
+    const [local, domain] = email.split('@');
+    if (!domain) return '***';
+    return `${local.charAt(0)}***@${domain}`;
+  }
+
   async sendVerificationEmail(email: string, code: string): Promise<void> {
     try {
       await this.mailerService.sendMail({
@@ -22,9 +28,12 @@ export class EmailService {
           appName: this.configService.smtpConfig.fromName,
         },
       });
-      this.logger.log(`Verification email sent to ${email}`);
+      this.logger.log(`Verification email sent to ${this.redactEmail(email)}`);
     } catch (error) {
-      this.logger.error(`Failed to send verification email to ${email}`, error);
+      this.logger.error(
+        `Failed to send verification email to ${this.redactEmail(email)}`,
+        error,
+      );
       throw error;
     }
   }
@@ -41,9 +50,12 @@ export class EmailService {
           loginUrl: `${this.configService.url}/auth/login`,
         },
       });
-      this.logger.log(`Welcome email sent to ${email}`);
+      this.logger.log(`Welcome email sent to ${this.redactEmail(email)}`);
     } catch (error) {
-      this.logger.error(`Failed to send welcome email to ${email}`, error);
+      this.logger.error(
+        `Failed to send welcome email to ${this.redactEmail(email)}`,
+        error,
+      );
     }
   }
 
@@ -58,9 +70,14 @@ export class EmailService {
           appName: this.configService.smtpConfig.fromName,
         },
       });
-      this.logger.log(`Password reset email sent to ${email}`);
+      this.logger.log(
+        `Password reset email sent to ${this.redactEmail(email)}`,
+      );
     } catch (error) {
-      this.logger.error(`Failed to send password reset email to ${email}`, error);
+      this.logger.error(
+        `Failed to send password reset email to ${this.redactEmail(email)}`,
+        error,
+      );
       throw error;
     }
   }
@@ -76,9 +93,12 @@ export class EmailService {
           appName: this.configService.smtpConfig.fromName,
         },
       });
-      this.logger.log(`MFA enabled email sent to ${email}`);
+      this.logger.log(`MFA enabled email sent to ${this.redactEmail(email)}`);
     } catch (error) {
-      this.logger.error(`Failed to send MFA enabled email to ${email}`, error);
+      this.logger.error(
+        `Failed to send MFA enabled email to ${this.redactEmail(email)}`,
+        error,
+      );
     }
   }
 
@@ -94,9 +114,14 @@ export class EmailService {
           supportUrl: `${this.configService.url}`,
         },
       });
-      this.logger.log(`Account locked email sent to ${email}`);
+      this.logger.log(
+        `Account locked email sent to ${this.redactEmail(email)}`,
+      );
     } catch (error) {
-      this.logger.error(`Failed to send account locked email to ${email}`, error);
+      this.logger.error(
+        `Failed to send account locked email to ${this.redactEmail(email)}`,
+        error,
+      );
     }
   }
 }

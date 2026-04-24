@@ -1,5 +1,13 @@
 import { registerAs } from '@nestjs/config';
 
+function requireEnv(key: string): string {
+  const value = process.env[key];
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${key}`);
+  }
+  return value;
+}
+
 export default registerAs('app', () => ({
   port: parseInt(process.env.PORT || '3000', 10),
   url: process.env.APP_URL || 'http://localhost:3000',
@@ -7,8 +15,8 @@ export default registerAs('app', () => ({
   lockTimeMinutes: parseInt(process.env.LOCK_TIME_MINUTES || '30', 10),
 
   jwt: {
-    secret: process.env.JWT_SECRET || 'default-secret',
-    refreshSecret: process.env.JWT_REFRESH_SECRET || 'default-refresh-secret',
+    secret: requireEnv('JWT_SECRET'),
+    refreshSecret: requireEnv('JWT_REFRESH_SECRET'),
     expiration: process.env.JWT_EXPIRATION || '15m',
     refreshExpiration: process.env.JWT_REFRESH_EXPIRATION || '7d',
     mfaExpiration: process.env.JWT_MFA_EXPIRATION || '5m',
@@ -18,7 +26,7 @@ export default registerAs('app', () => ({
     host: process.env.DB_HOST || 'localhost',
     port: parseInt(process.env.DB_PORT || '5432', 10),
     username: process.env.DB_USERNAME || 'postgres',
-    password: process.env.DB_PASSWORD || '',
+    password: requireEnv('DB_PASSWORD'),
     database: process.env.DB_DATABASE || 'postgres',
     ssl: process.env.DB_SSL === 'true',
   },

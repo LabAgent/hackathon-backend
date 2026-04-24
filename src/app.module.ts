@@ -9,6 +9,21 @@ import { AdminModule } from './modules/admin/admin.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
+function getSslConfig(sslEnabled: boolean) {
+  if (!sslEnabled) return false;
+  
+  if (process.env.DB_SSL_REJECT_UNAUTHORIZED === 'false') {
+    return { rejectUnauthorized: false };
+  }
+  
+  return {
+    rejectUnauthorized: true,
+    ca: process.env.DB_SSL_CA,
+    cert: process.env.DB_SSL_CERT,
+    key: process.env.DB_SSL_KEY,
+  };
+}
+
 @Module({
   imports: [
     AppConfigModule,
@@ -21,7 +36,7 @@ import { AppService } from './app.service';
         username: configService.dbConfig.username,
         password: configService.dbConfig.password,
         database: configService.dbConfig.database,
-        ssl: configService.dbConfig.ssl ? { rejectUnauthorized: false } : false,
+        ssl: getSslConfig(configService.dbConfig.ssl),
         entities: [__dirname + '/entities/*.entity{.ts,.js}'],
         synchronize: true,
         autoLoadEntities: true,

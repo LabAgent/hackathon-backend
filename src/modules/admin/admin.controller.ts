@@ -7,6 +7,8 @@ import {
   Query,
   Body,
   UseGuards,
+  ParseUUIDPipe,
+  ForbiddenException,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import {
@@ -20,6 +22,7 @@ import { AdminUpdateUserDto, ListUsersQueryDto, LockUserDto } from './dto';
 import { Roles } from '../../common/decorators';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { UserRole } from '../../entities/user.entity';
+import { CurrentUser } from '../../common/decorators';
 
 @ApiTags('Admin')
 @ApiBearerAuth()
@@ -39,7 +42,7 @@ export class AdminController {
   @Get('users/:id')
   @ApiOperation({ summary: 'Get user details' })
   @ApiResponse({ status: 200, description: 'Returns user details' })
-  async getUser(@Param('id') id: string) {
+  async getUser(@Param('id', ParseUUIDPipe) id: string) {
     return this.adminService.getUser(id);
   }
 
@@ -47,23 +50,42 @@ export class AdminController {
   @ApiOperation({ summary: 'Update user (role, status)' })
   @ApiResponse({ status: 200, description: 'User updated successfully' })
   async updateUser(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: AdminUpdateUserDto,
+    @CurrentUser('id') currentUserId: string,
   ) {
+    if (id === currentUserId) {
+      throw new ForbiddenException('Admins cannot modify their own account');
+    }
     return this.adminService.updateUser(id, dto);
   }
 
   @Put('users/:id/lock')
   @ApiOperation({ summary: 'Lock/unlock user account' })
   @ApiResponse({ status: 200, description: 'Account lock status updated' })
-  async lockUser(@Param('id') id: string, @Body() dto: LockUserDto) {
+  async lockUser(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: LockUserDto,
+    @CurrentUser('id') currentUserId: string,
+  ) {
+    if (id === currentUserId) {
+      throw new ForbiddenException('Admins cannot lock their own account');
+    }
     return this.adminService.lockUser(id, dto);
   }
 
   @Delete('users/:id')
   @ApiOperation({ summary: 'Deactivate user account' })
   @ApiResponse({ status: 200, description: 'User deactivated' })
-  async deactivateUser(@Param('id') id: string) {
+  async deactivateUser(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser('id') currentUserId: string,
+  ) {
+    if (id === currentUserId) {
+      throw new ForbiddenException(
+        'Admins cannot deactivate their own account',
+      );
+    }
     return this.adminService.deactivateUser(id);
   }
 }

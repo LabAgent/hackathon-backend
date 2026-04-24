@@ -43,6 +43,12 @@ export class CloudinaryService {
   }
 
   async deleteImage(publicId: string): Promise<void> {
+    if (!publicId.startsWith('profiles/')) {
+      this.logger.warn(
+        `Rejected deletion of publicId outside allowed prefix: ${publicId}`,
+      );
+      return;
+    }
     try {
       await cloudinary.uploader.destroy(publicId);
     } catch (error) {

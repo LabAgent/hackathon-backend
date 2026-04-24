@@ -34,9 +34,9 @@ export class AdminService {
   }
 
   async getUser(id: string) {
-    return this.usersService.findById(id).then((user) =>
-      this.usersService.sanitizeUser(user),
-    );
+    return this.usersService
+      .findById(id)
+      .then((user) => this.usersService.sanitizeUser(user));
   }
 
   async updateUser(id: string, dto: AdminUpdateUserDto) {

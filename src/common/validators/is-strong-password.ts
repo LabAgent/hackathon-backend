@@ -6,9 +6,7 @@ import {
 } from 'class-validator';
 
 @ValidatorConstraint({ name: 'IsStrongPassword' })
-export class IsStrongPasswordConstraint
-  implements ValidatorConstraintInterface
-{
+export class IsStrongPasswordConstraint implements ValidatorConstraintInterface {
   validate(password: string): boolean {
     if (!password) return false;
     const hasUppercase = /[A-Z]/.test(password);

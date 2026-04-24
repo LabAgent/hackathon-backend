@@ -33,11 +33,15 @@ export class UsersService {
     return this.userRepository.findOne({ where: { email } });
   }
 
-  async updateProfile(id: string, dto: UpdateProfileDto): Promise<Partial<User>> {
+  async updateProfile(
+    id: string,
+    dto: UpdateProfileDto,
+  ): Promise<Partial<User>> {
     const user = await this.findById(id);
 
-    if (dto.email && dto.email !== user.email) {
-      const existing = await this.findByEmail(dto.email);
+    if (dto.email && dto.email.toLowerCase().trim() !== user.email) {
+      const normalizedEmail = dto.email.toLowerCase().trim();
+      const existing = await this.findByEmail(normalizedEmail);
       if (existing) {
         throw new BadRequestException('Email already in use');
       }
@@ -45,14 +49,20 @@ export class UsersService {
 
     await this.userRepository.update(id, {
       ...(dto.fullName && { fullName: dto.fullName }),
-      ...(dto.email && { email: dto.email }),
+      ...(dto.email && {
+        email: dto.email.toLowerCase().trim(),
+        isVerified: false,
+      }),
     });
 
     const updated = await this.findById(id);
     return this.sanitizeUser(updated);
   }
 
-  async changePassword(id: string, dto: ChangePasswordDto): Promise<{ message: string }> {
+  async changePassword(
+    id: string,
+    dto: ChangePasswordDto,
+  ): Promise<{ message: string }> {
     const user = await this.userRepository.findOne({
       where: { id },
       select: ['id', 'passwordHash'],
@@ -75,7 +85,10 @@ export class UsersService {
     return { message: 'Password changed successfully' };
   }
 
-  async uploadImage(id: string, file: Express.Multer.File): Promise<{ image: string }> {
+  async uploadImage(
+    id: string,
+    file: Express.Multer.File,
+  ): Promise<{ image: string }> {
     const user = await this.findById(id);
 
     if (user.image) {
@@ -137,7 +150,10 @@ export class UsersService {
     return this.sanitizeUser(updated);
   }
 
-  async lockUser(id: string, lockDurationMinutes: number): Promise<Partial<User>> {
+  async lockUser(
+    id: string,
+    lockDurationMinutes: number,
+  ): Promise<Partial<User>> {
     const lockedUntil = new Date(Date.now() + lockDurationMinutes * 60 * 1000);
     await this.userRepository.update(id, { lockedUntil });
     const updated = await this.findById(id);
@@ -145,7 +161,10 @@ export class UsersService {
   }
 
   async unlockUser(id: string): Promise<Partial<User>> {
-    await this.userRepository.update(id, { lockedUntil: null as any, failedAttempts: 0 });
+    await this.userRepository.update(id, {
+      lockedUntil: null as any,
+      failedAttempts: 0,
+    });
     const updated = await this.findById(id);
     return this.sanitizeUser(updated);
   }

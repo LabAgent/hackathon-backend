@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty } from 'class-validator';
+import { IsString, IsNotEmpty, Length } from 'class-validator';
 
 export class MfaBackupCodeVerifyDto {
   @ApiProperty({ description: 'Temporary token received from login step 1' })
@@ -10,5 +10,6 @@ export class MfaBackupCodeVerifyDto {
   @ApiProperty({ description: 'Backup code' })
   @IsString()
   @IsNotEmpty()
+  @Length(8, 8)
   backupCode: string;
 }

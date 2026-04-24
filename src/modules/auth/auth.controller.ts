@@ -5,7 +5,6 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
-  Req,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -14,6 +13,7 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import {
   RegisterDto,
@@ -37,6 +37,7 @@ export class AuthController {
 
   @Public()
   @Post('register')
+  @Throttle({ short: { ttl: 60000, limit: 5 } })
   @ApiOperation({ summary: 'Register a new user' })
   @ApiResponse({ status: 201, description: 'User registered successfully' })
   @ApiResponse({ status: 400, description: 'Email already registered' })
@@ -47,6 +48,7 @@ export class AuthController {
   @Public()
   @Post('verify-email')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ short: { ttl: 60000, limit: 5 } })
   @ApiOperation({ summary: 'Verify email address with code' })
   @ApiResponse({ status: 200, description: 'Email verified successfully' })
   @ApiResponse({ status: 400, description: 'Invalid or expired code' })
@@ -57,6 +59,7 @@ export class AuthController {
   @Public()
   @Post('resend-verification')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ short: { ttl: 60000, limit: 3 } })
   @ApiOperation({ summary: 'Resend email verification' })
   @ApiResponse({ status: 200, description: 'Verification email resent' })
   async resendVerification(@Body() dto: ResendVerificationDto) {
@@ -66,6 +69,7 @@ export class AuthController {
   @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ short: { ttl: 60000, limit: 10 } })
   @ApiOperation({ summary: 'Login step 1 - email & password' })
   @ApiResponse({
     status: 200,
@@ -81,8 +85,12 @@ export class AuthController {
   @Public()
   @Post('mfa/verify')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ short: { ttl: 60000, limit: 10 } })
   @ApiOperation({ summary: 'Login step 2 - verify MFA TOTP code' })
-  @ApiResponse({ status: 200, description: 'Returns access and refresh tokens' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns access and refresh tokens',
+  })
   @ApiResponse({ status: 401, description: 'Invalid TOTP code or temp token' })
   async verifyMfa(@Body() dto: MfaVerifyDto) {
     return this.authService.verifyMfa(dto);
@@ -91,8 +99,12 @@ export class AuthController {
   @Public()
   @Post('mfa/verify-backup')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ short: { ttl: 60000, limit: 10 } })
   @ApiOperation({ summary: 'Login step 2 - verify MFA with backup code' })
-  @ApiResponse({ status: 200, description: 'Returns access and refresh tokens' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns access and refresh tokens',
+  })
   async verifyMfaBackupCode(@Body() dto: MfaBackupCodeVerifyDto) {
     return this.authService.verifyMfaBackupCode(dto);
   }
@@ -112,7 +124,10 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Enable MFA after verifying TOTP code' })
-  @ApiResponse({ status: 200, description: 'MFA enabled, returns backup codes' })
+  @ApiResponse({
+    status: 200,
+    description: 'MFA enabled, returns backup codes',
+  })
   async enableMfa(
     @CurrentUser('id') userId: string,
     @Body() dto: MfaEnableDto,
@@ -166,8 +181,12 @@ export class AuthController {
   @Public()
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ short: { ttl: 60000, limit: 3 } })
   @ApiOperation({ summary: 'Request password reset email' })
-  @ApiResponse({ status: 200, description: 'Reset email sent if account exists' })
+  @ApiResponse({
+    status: 200,
+    description: 'Reset email sent if account exists',
+  })
   async forgotPassword(@Body() dto: ForgotPasswordDto) {
     return this.authService.forgotPassword(dto);
   }
@@ -175,6 +194,7 @@ export class AuthController {
   @Public()
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ short: { ttl: 60000, limit: 5 } })
   @ApiOperation({ summary: 'Reset password with code' })
   @ApiResponse({ status: 200, description: 'Password reset successfully' })
   async resetPassword(@Body() dto: ResetPasswordDto) {

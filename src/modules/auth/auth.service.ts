@@ -11,7 +11,7 @@ import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, MoreThan } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
-import { randomUUID } from 'crypto';
+import { randomUUID, randomInt, createHash } from 'crypto';
 import { User, UserRole } from '../../entities/user.entity';
 import { RefreshToken } from '../../entities/refresh-token.entity';
 import { PasswordReset } from '../../entities/password-reset.entity';
@@ -53,23 +53,31 @@ export class AuthService {
   ) {}
 
   private generateCode(): string {
-    return String(Math.floor(100000 + Math.random() * 900000));
+    return String(randomInt(100000, 1000000));
+  }
+
+  private hashToken(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
   }
 
   async register(dto: RegisterDto) {
+    const normalizedEmail = dto.email.toLowerCase().trim();
     const existingUser = await this.userRepository.findOne({
-      where: { email: dto.email },
+      where: { email: normalizedEmail },
     });
     if (existingUser) {
-      throw new BadRequestException('Email already registered');
+      return {
+        message:
+          'If this email is not already registered, a verification code has been sent.',
+      };
     }
 
     const passwordHash = await bcrypt.hash(dto.password, 12);
     const user = this.userRepository.create({
-      email: dto.email,
+      email: normalizedEmail,
       passwordHash,
       fullName: dto.fullName,
-      role: dto.role || UserRole.USER,
+      role: UserRole.USER,
     });
     await this.userRepository.save(user);
 
@@ -85,48 +93,54 @@ export class AuthService {
     await this.emailService.sendVerificationEmail(user.email, code);
 
     return {
-      message: 'Registration successful. Please check your email for the verification code.',
+      message:
+        'Registration successful. Please check your email for the verification code.',
       userId: user.id,
     };
   }
 
   async verifyEmail(dto: VerifyEmailDto) {
-    const verificationToken = await this.emailVerificationRepository.findOne({
-      where: { code: dto.code },
-      relations: ['user'],
+    const normalizedEmail = dto.email.toLowerCase().trim();
+    const user = await this.userRepository.findOne({
+      where: { email: normalizedEmail },
     });
-    if (!verificationToken) {
+    if (!user) {
       throw new BadRequestException('Invalid verification code');
     }
-    if (verificationToken.user.email !== dto.email) {
+
+    const verificationToken = await this.emailVerificationRepository.findOne({
+      where: { code: dto.code, userId: user.id },
+    });
+    if (!verificationToken) {
       throw new BadRequestException('Invalid verification code');
     }
     if (verificationToken.expiresAt < new Date()) {
       throw new BadRequestException('Verification code has expired');
     }
-    if (verificationToken.user.isVerified) {
+    if (user.isVerified) {
       throw new BadRequestException('Email already verified');
     }
 
-    await this.userRepository.update(verificationToken.userId, {
+    await this.userRepository.update(user.id, {
       isVerified: true,
     });
     await this.emailVerificationRepository.delete(verificationToken.id);
 
-    await this.emailService.sendWelcomeEmail(
-      verificationToken.user.email,
-      verificationToken.user.fullName,
-    );
+    await this.emailService.sendWelcomeEmail(user.email, user.fullName);
 
     return { message: 'Email verified successfully. You can now log in.' };
   }
 
   async resendVerification(dto: ResendVerificationDto) {
+    const normalizedEmail = dto.email.toLowerCase().trim();
     const user = await this.userRepository.findOne({
-      where: { email: dto.email },
+      where: { email: normalizedEmail },
     });
     if (!user) {
-      throw new BadRequestException('No account found with this email');
+      return {
+        message:
+          'If this email is registered, a new verification code has been sent.',
+      };
     }
     if (user.isVerified) {
       throw new BadRequestException('Email already verified');
@@ -146,19 +160,27 @@ export class AuthService {
 
     await this.emailService.sendVerificationEmail(user.email, code);
 
-    return { message: 'Verification code resent successfully.' };
+    return {
+      message:
+        'If this email is registered, a new verification code has been sent.',
+    };
   }
 
   async login(dto: LoginDto) {
+    const normalizedEmail = dto.email.toLowerCase().trim();
     const user = await this.userRepository.findOne({
-      where: { email: dto.email },
+      where: { email: normalizedEmail },
     });
+
     if (!user) {
+      await bcrypt.hash(dto.password, 12);
       throw new UnauthorizedException('Invalid credentials');
     }
 
     if (!user.isVerified) {
-      throw new ForbiddenException('Please verify your email before logging in');
+      throw new ForbiddenException(
+        'Please verify your email before logging in',
+      );
     }
 
     if (user.lockedUntil && user.lockedUntil > new Date()) {
@@ -175,10 +197,19 @@ export class AuthService {
       throw new ForbiddenException('Account deactivated. Contact support.');
     }
 
-    const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
+    const isPasswordValid = await bcrypt.compare(
+      dto.password,
+      user.passwordHash,
+    );
     if (!isPasswordValid) {
-      const failedAttempts = user.failedAttempts + 1;
-      if (failedAttempts >= this.configService.maxFailedAttempts) {
+      await this.userRepository.increment({ id: user.id }, 'failedAttempts', 1);
+      const updatedUser = await this.userRepository.findOne({
+        where: { id: user.id },
+      });
+      if (
+        updatedUser &&
+        updatedUser.failedAttempts >= this.configService.maxFailedAttempts
+      ) {
         const lockedUntil = new Date(
           Date.now() + this.configService.lockTimeMinutes * 60 * 1000,
         );
@@ -186,17 +217,20 @@ export class AuthService {
           failedAttempts: 0,
           lockedUntil,
         });
-        await this.emailService.sendAccountLockedEmail(user.email, user.fullName);
+        await this.emailService.sendAccountLockedEmail(
+          user.email,
+          user.fullName,
+        );
         throw new HttpException(
           'Account locked due to too many failed attempts',
           HttpStatus.LOCKED,
         );
       }
-      await this.userRepository.update(user.id, {
-        failedAttempts,
-      });
+      const remaining =
+        this.configService.maxFailedAttempts -
+        (updatedUser?.failedAttempts ?? 1);
       throw new UnauthorizedException(
-        `Invalid credentials. ${this.configService.maxFailedAttempts - failedAttempts} attempts remaining`,
+        `Invalid credentials. ${remaining} attempts remaining`,
       );
     }
 
@@ -250,7 +284,7 @@ export class AuthService {
       throw new UnauthorizedException('User not found');
     }
 
-    if (!this.mfaService.verifyTotp(user.mfaSecret!, dto.totpCode)) {
+    if (!this.mfaService.verifyTotp(user.mfaSecret, dto.totpCode)) {
       throw new UnauthorizedException('Invalid MFA code');
     }
 
@@ -283,7 +317,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid backup code');
     }
 
-    const codeIndex = this.mfaService.verifyBackupCode(
+    const codeIndex = await this.mfaService.verifyBackupCodeHashed(
       user.mfaBackupCodes,
       dto.backupCode,
     );
@@ -320,7 +354,8 @@ export class AuthService {
       secret,
       qrCode,
       manualEntry: otpauthUrl,
-      message: 'Scan the QR code with your authenticator app, then verify with the enable endpoint',
+      message:
+        'Scan the QR code with your authenticator app, then verify with the enable endpoint',
     };
   }
 
@@ -333,7 +368,9 @@ export class AuthService {
       throw new BadRequestException('MFA is already enabled');
     }
     if (!user.mfaSecret) {
-      throw new BadRequestException('Please set up MFA first using the setup endpoint');
+      throw new BadRequestException(
+        'Please set up MFA first using the setup endpoint',
+      );
     }
 
     if (!this.mfaService.verifyTotp(user.mfaSecret, dto.totpCode)) {
@@ -341,9 +378,11 @@ export class AuthService {
     }
 
     const backupCodes = this.mfaService.generateBackupCodes();
+    const hashedBackupCodes =
+      await this.mfaService.hashBackupCodes(backupCodes);
     await this.userRepository.update(userId, {
       mfaEnabled: true,
-      mfaBackupCodes: backupCodes,
+      mfaBackupCodes: hashedBackupCodes,
     });
 
     await this.emailService.sendMfaEnabledEmail(user.email, user.fullName);
@@ -363,7 +402,10 @@ export class AuthService {
       throw new BadRequestException('MFA is not enabled');
     }
 
-    const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
+    const isPasswordValid = await bcrypt.compare(
+      dto.password,
+      user.passwordHash,
+    );
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid password');
     }
@@ -387,7 +429,11 @@ export class AuthService {
     }
 
     const backupCodes = this.mfaService.generateBackupCodes();
-    await this.userRepository.update(userId, { mfaBackupCodes: backupCodes });
+    const hashedBackupCodes =
+      await this.mfaService.hashBackupCodes(backupCodes);
+    await this.userRepository.update(userId, {
+      mfaBackupCodes: hashedBackupCodes,
+    });
 
     return {
       message: 'Backup codes regenerated successfully',
@@ -396,8 +442,9 @@ export class AuthService {
   }
 
   async refreshTokens(dto: RefreshTokenDto) {
+    const tokenHash = this.hashToken(dto.refreshToken);
     const refreshTokenEntity = await this.refreshTokenRepository.findOne({
-      where: { token: dto.refreshToken },
+      where: { token: tokenHash },
       relations: ['user'],
     });
 
@@ -405,6 +452,9 @@ export class AuthService {
       throw new UnauthorizedException('Invalid refresh token');
     }
     if (refreshTokenEntity.isRevoked) {
+      await this.refreshTokenRepository.delete({
+        userId: refreshTokenEntity.userId,
+      });
       throw new UnauthorizedException('Refresh token has been revoked');
     }
     if (refreshTokenEntity.expiresAt < new Date()) {
@@ -422,8 +472,9 @@ export class AuthService {
   }
 
   async logout(refreshToken: string) {
+    const tokenHash = this.hashToken(refreshToken);
     const tokenEntity = await this.refreshTokenRepository.findOne({
-      where: { token: refreshToken },
+      where: { token: tokenHash },
     });
     if (tokenEntity) {
       await this.refreshTokenRepository.update(tokenEntity.id, {
@@ -434,12 +485,18 @@ export class AuthService {
   }
 
   async forgotPassword(dto: ForgotPasswordDto) {
+    const normalizedEmail = dto.email.toLowerCase().trim();
     const user = await this.userRepository.findOne({
-      where: { email: dto.email },
+      where: { email: normalizedEmail },
     });
     if (!user) {
-      return { message: 'If an account with this email exists, a reset code has been sent.' };
+      return {
+        message:
+          'If an account with this email exists, a reset code has been sent.',
+      };
     }
+
+    await this.passwordResetRepository.delete({ userId: user.id });
 
     const code = this.generateCode();
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
@@ -453,18 +510,25 @@ export class AuthService {
 
     await this.emailService.sendPasswordResetEmail(user.email, code);
 
-    return { message: 'If an account with this email exists, a reset code has been sent.' };
+    return {
+      message:
+        'If an account with this email exists, a reset code has been sent.',
+    };
   }
 
   async resetPassword(dto: ResetPasswordDto) {
-    const resetToken = await this.passwordResetRepository.findOne({
-      where: { code: dto.code },
-      relations: ['user'],
+    const normalizedEmail = dto.email.toLowerCase().trim();
+    const user = await this.userRepository.findOne({
+      where: { email: normalizedEmail },
     });
-    if (!resetToken) {
+    if (!user) {
       throw new BadRequestException('Invalid reset code');
     }
-    if (resetToken.user.email !== dto.email) {
+
+    const resetToken = await this.passwordResetRepository.findOne({
+      where: { code: dto.code, userId: user.id },
+    });
+    if (!resetToken) {
       throw new BadRequestException('Invalid reset code');
     }
     if (resetToken.used) {
@@ -472,6 +536,16 @@ export class AuthService {
     }
     if (resetToken.expiresAt < new Date()) {
       throw new BadRequestException('Reset code has expired');
+    }
+
+    const isSamePassword = await bcrypt.compare(
+      dto.password,
+      user.passwordHash,
+    );
+    if (isSamePassword) {
+      throw new BadRequestException(
+        'New password must be different from current password',
+      );
     }
 
     const passwordHash = await bcrypt.hash(dto.password, 12);
@@ -493,16 +567,19 @@ export class AuthService {
     const accessToken = this.jwtService.sign(payload, {
       secret: this.configService.jwtSecret,
       expiresIn: this.configService.jwtExpiration as any,
+      issuer: 'codeitup-api',
+      audience: 'codeitup-app',
     });
 
     const refreshToken = randomUUID();
+    const tokenHash = this.hashToken(refreshToken);
     const expiresAt = new Date(
       Date.now() + this.parseDuration(this.configService.jwtRefreshExpiration),
     );
 
     await this.refreshTokenRepository.save(
       this.refreshTokenRepository.create({
-        token: refreshToken,
+        token: tokenHash,
         userId: user.id,
         expiresAt,
       }),

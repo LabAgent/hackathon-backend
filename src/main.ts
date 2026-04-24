@@ -22,8 +22,19 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api');
 
+  const allowedOrigins = process.env.CORS_ORIGINS?.split(',') || [
+    'http://localhost:5173',
+    'http://localhost:3000',
+  ];
+
   app.enableCors({
-    origin: true,
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     credentials: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     allowedHeaders: 'Content-Type, Accept, Authorization',
@@ -40,20 +51,22 @@ async function bootstrap() {
   app.useGlobalFilters(new AllExceptionsFilter());
   app.useGlobalInterceptors(new TransformInterceptor());
 
-  const config = new DocumentBuilder()
-    .setTitle('CodeItUp API')
-    .setDescription(
-      'Secure Login System with Multi-Factor Authentication (MFA) API Documentation',
-    )
-    .setVersion('1.0')
-    .addBearerAuth()
-    .addTag('Authentication', 'Auth endpoints including MFA')
-    .addTag('Users', 'User profile management')
-    .addTag('Admin', 'Admin management endpoints')
-    .build();
+  if (process.env.NODE_ENV !== 'production') {
+    const config = new DocumentBuilder()
+      .setTitle('CodeItUp API')
+      .setDescription(
+        'Secure Login System with Multi-Factor Authentication (MFA) API Documentation',
+      )
+      .setVersion('1.0')
+      .addBearerAuth()
+      .addTag('Authentication', 'Auth endpoints including MFA')
+      .addTag('Users', 'User profile management')
+      .addTag('Admin', 'Admin management endpoints')
+      .build();
 
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document);
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('api/docs', app, document);
+  }
 
   const port = process.env.PORT || 3000;
   await app.listen(port);
