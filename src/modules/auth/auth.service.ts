@@ -90,7 +90,11 @@ export class AuthService {
     });
     await this.emailVerificationRepository.save(tokenEntity);
 
-    this.emailService.sendVerificationEmail(user.email, code).catch(() => {});
+    try {
+      await this.emailService.sendVerificationEmail(user.email, code);
+    } catch (err) {
+      this.logger.error('Failed to send verification email', err);
+    }
 
     return {
       message:
@@ -126,7 +130,11 @@ export class AuthService {
     });
     await this.emailVerificationRepository.delete(verificationToken.id);
 
-    this.emailService.sendWelcomeEmail(user.email, user.fullName).catch(() => {});
+    try {
+      await this.emailService.sendWelcomeEmail(user.email, user.fullName);
+    } catch (err) {
+      this.logger.error('Failed to send welcome email', err);
+    }
 
     return { message: 'Email verified successfully. You can now log in.' };
   }
@@ -158,7 +166,11 @@ export class AuthService {
       }),
     );
 
-    this.emailService.sendVerificationEmail(user.email, code).catch(() => {});
+    try {
+      await this.emailService.sendVerificationEmail(user.email, code);
+    } catch (err) {
+      this.logger.error('Failed to resend verification email', err);
+    }
 
     return {
       message:
@@ -217,7 +229,11 @@ export class AuthService {
           failedAttempts: 0,
           lockedUntil,
         });
-        this.emailService.sendAccountLockedEmail(user.email, user.fullName).catch(() => {});
+        try {
+          await this.emailService.sendAccountLockedEmail(user.email, user.fullName);
+        } catch (err) {
+          this.logger.error('Failed to send account locked email', err);
+        }
         throw new HttpException(
           'Account locked due to too many failed attempts',
           HttpStatus.LOCKED,
@@ -381,7 +397,11 @@ export class AuthService {
       mfaBackupCodes: hashedBackupCodes,
     });
 
-    this.emailService.sendMfaEnabledEmail(user.email, user.fullName).catch(() => {});
+    try {
+      await this.emailService.sendMfaEnabledEmail(user.email, user.fullName);
+    } catch (err) {
+      this.logger.error('Failed to send MFA enabled email', err);
+    }
 
     return {
       message: 'MFA enabled successfully',
@@ -503,7 +523,11 @@ export class AuthService {
       }),
     );
 
-    this.emailService.sendPasswordResetEmail(user.email, code).catch(() => {});
+    try {
+      await this.emailService.sendPasswordResetEmail(user.email, code);
+    } catch (err) {
+      this.logger.error('Failed to send password reset email', err);
+    }
 
     return {
       message:
