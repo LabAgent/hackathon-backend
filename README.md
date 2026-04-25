@@ -1,98 +1,265 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Sandy's Treedome Lab — AI Lab Management System
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+> 🐿️ **"Shhh — don't tell Mr. Krabs, but this lab is powered by multi-agent AI!"**
+>
+> A full-stack SpongeBob-themed lab management system featuring LangGraph-powered multi-agent orchestration, real-time web search, and role-based access control.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Architecture Overview
 
-## Description
+### Multi-Agent System (LangGraph)
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+The platform uses **LangGraph** for agent orchestration — a `StateGraph` that routes queries between specialized agents:
 
-## Project setup
-
-```bash
-$ npm install
+```
+┌──────────────────────────────────────────────────────┐
+│                    Planner Agent                       │
+│         (Sandy Cheeks' Central Coordinator)            │
+│   Analyzes intent → Routes to specialist agent         │
+│   Synthesizes final response from specialist results   │
+└──────────┬──────────┬──────────┬─────────────────────┘
+           │          │          │
+     ┌─────▼────┐ ┌──▼──────┐ ┌─▼──────────┐
+     │ Research  │ │Inventory│ │  Database  │
+     │  Agent   │ │  Agent  │ │   Agent    │
+     │          │ │         │ │            │
+     │• Web     │ │• Check  │ │• Query     │
+     │  Search  │ │  Stock  │ │  Records   │
+     │  (Tavily)│ │• Update │ │• Create    │
+     │• Suggest │ │  Stock  │ │  Records   │
+     │  Hypothesis│• Alert  │ │• Update    │
+     │• Analyze │ │  Low    │ │  Records   │
+     │  Findings│ │  Stock  │ │• Delete    │
+     └──────────┘ │• Suggest│ │  Records   │
+                  │  Reorder│ └────────────┘
+                  └─────────┘
 ```
 
-## Compile and run the project
+**LangGraph Flow:**
+1. `START → planner` (Planner analyzes user intent)
+2. `planner → research | inventory | database` (Conditional routing via `route_to_agent`)
+3. `research | inventory | database → planner` (Specialist returns results to Planner)
+4. `planner → END` (Planner synthesizes final response)
+
+Each agent has its own system prompt, tool set, and streaming capability. The Planner uses the `route_to_agent` tool to delegate, while specialists use domain-specific tools.
+
+### Tools
+
+| Agent | Tool | Description |
+|-------|------|-------------|
+| **Planner** | `route_to_agent` | Routes queries to Research, Inventory, or Database agents |
+| **Research** | `web_search` | Real-time web search via **Tavily API** (with LLM fallback) |
+| **Research** | `suggest_hypothesis` | AI-generated scientific hypotheses |
+| **Research** | `create_experiment_log` | Log experiment results for a project |
+| **Research** | `analyze_findings` | Analyze experiment data from a project |
+| **Inventory** | `check_stock` | Query inventory by name, category, or low stock |
+| **Inventory** | `update_stock` | Update item quantity with automatic transaction logging |
+| **Inventory** | `alert_low_stock` | Find items below minimum threshold |
+| **Inventory** | `suggest_reorder` | Calculate reorder suggestions |
+| **Database** | `query_records` | Query any table with filters |
+| **Database** | `create_record` | Create new records |
+| **Database** | `update_record` | Update existing records |
+| **Database** | `delete_record` | Delete records |
+
+### Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| **Backend** | NestJS, TypeORM, PostgreSQL |
+| **Frontend** | React 19, Vite, Tailwind CSS v4, Zustand, React Router v7 |
+| **AI Orchestration** | LangGraph (StateGraph), OpenAI SDK (via OpenRouter) |
+| **Web Search** | Tavily Search API (with LLM fallback) |
+| **Auth** | JWT + Refresh Tokens + MFA (TOTP) |
+| **Real-time** | Server-Sent Events (SSE) for streaming agent responses |
+
+## Features
+
+### Core
+- **Multi-Agent AI Chat**: Real-time streaming with Planner → Specialist routing
+- **Research Management**: Create projects, log experiments, analyze findings
+- **Inventory Management**: Track supplies, low stock alerts, reorder suggestions
+- **Role-Based Access**: User, Researcher, Lab Assistant, Admin roles
+- **MFA Support**: TOTP-based two-factor authentication
+- **Admin Panel**: User management, account lockout, role assignment
+
+### SpongeBob Theme
+- **Color Palette**: Ocean blues, Sandy yellows, Coral reds, Kelp greens
+- **Lab Naming**: "Treedome Lab" branding throughout
+- **Agent Personas**: Each agent uses SpongeBob-themed language
+- **Underwater Aesthetics**: Gradient backgrounds, themed icons, Sandy's "S" logo
+
+## Getting Started
+
+### Prerequisites
+- Node.js 18+
+- PostgreSQL 14+
+- OpenRouter API key (for AI)
+- Tavily API key (for web search) — free tier at [tavily.com](https://tavily.com)
+
+### Backend Setup
 
 ```bash
-# development
-$ npm run start
+cd hackathon-backend
 
-# watch mode
-$ npm run start:dev
+# Install dependencies
+npm install
 
-# production mode
-$ npm run start:prod
+# Create PostgreSQL database
+createdb sandy_lab
+
+# Configure environment
+cp .env.example .env
+# Edit .env with your database and API keys
+
+# Run migrations (TypeORM synchronize is enabled for development)
+npm run start:dev
 ```
 
-## Run tests
+### Frontend Setup
 
 ```bash
-# unit tests
-$ npm run test
+cd hackathon-frontend
 
-# e2e tests
-$ npm run test:e2e
+# Install dependencies
+npm install
 
-# test coverage
-$ npm run test:cov
+# Configure environment
+cp .env.example .env
+# VITE_API_BASE_URL=http://localhost:3000
+
+# Start development server
+npm run dev
 ```
 
-## Deployment
+### Environment Variables
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+#### Backend (.env)
+```env
+# Database
+DB_HOST=localhost
+DB_PORT=5432
+DB_USERNAME=sandy
+DB_PASSWORD=your_password
+DB_DATABASE=sandy_lab
+DB_SSL=false
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+# AI
+OPENROUTER_API_KEY=sk-or-v1-your-key
+AI_MODEL=openai/gpt-4o-mini
+TAVILY_API_KEY=tvly-your-key
+MOCK_PIPELINE=false
 
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+# JWT
+JWT_SECRET=your_jwt_secret_min_64_chars_long
+JWT_REFRESH_SECRET=your_refresh_secret_min_64_chars_long
+
+# Server
+PORT=3000
+CORS_ORIGINS=http://localhost:5173,http://localhost:3000
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+#### Frontend (.env)
+```env
+VITE_API_BASE_URL=http://localhost:3000
+```
 
-## Resources
+## API Endpoints
 
-Check out a few resources that may come in handy when working with NestJS:
+| Endpoint | Description |
+|----------|-------------|
+| `POST /api/chat` | Send message to AI Lab Assistant (SSE stream) |
+| `GET /api/chat` | List conversations |
+| `GET /api/chat/:id` | Get conversation with messages |
+| `GET /api/research` | List research projects |
+| `POST /api/research` | Create research project |
+| `GET /api/research/stats` | Get project statistics |
+| `GET /api/inventory` | List inventory items |
+| `POST /api/inventory` | Create inventory item |
+| `GET /api/inventory/low-stock` | Get low stock alerts |
+| `GET /api/inventory/stats` | Get inventory statistics |
+| `POST /api/auth/register` | Register new user |
+| `POST /api/auth/login` | Login |
+| `POST /api/auth/refresh` | Refresh access token |
+| `POST /api/auth/mfa/enable` | Enable MFA |
+| `POST /api/auth/mfa/verify` | Verify MFA |
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+## LangGraph Implementation
 
-## Support
+The agent orchestration is implemented using `@langchain/langgraph`:
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+```typescript
+const graph = new StateGraph(AgentGraphState)
+  .addNode('planner', plannerNode)
+  .addNode('research', specialistNode('research'))
+  .addNode('inventory', specialistNode('inventory'))
+  .addNode('database', specialistNode('database'))
+  .addEdge(START, 'planner')
+  .addConditionalEdges('planner', routeFromPlanner)
+  .addEdge('research', 'planner')
+  .addEdge('inventory', 'planner')
+  .addEdge('database', 'planner');
+```
 
-## Stay in touch
+- **StateGraph** manages agent state transitions
+- **Conditional edges** route from Planner to specialist agents based on intent analysis
+- **SSE streaming** provides real-time feedback during agent processing
+- **Fallback mode**: If LangGraph fails, the system falls back to direct agent execution
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+## Project Structure
 
-## License
+```
+hackathon-backend/
+├── src/
+│   ├── modules/
+│   │   ├── agent/
+│   │   │   ├── agent.graph.ts          # LangGraph StateGraph orchestration
+│   │   │   ├── agents/
+│   │   │   │   ├── planner.agent.ts     # Planner system prompt & tools
+│   │   │   │   ├── research.agent.ts    # Research agent prompt & tools
+│   │   │   │   ├── inventory.agent.ts   # Inventory agent prompt & tools
+│   │   │   │   └── database.agent.ts    # Database agent prompt & tools
+│   │   │   └── tools/
+│   │   │       ├── definitions.ts       # Tool definitions (OpenAI function schema)
+│   │   │       └── executor.ts          # Tool execution (Tavily, DB, etc.)
+│   │   ├── chat/                        # Chat SSE controller & service
+│   │   ├── auth/                         # JWT auth, MFA, email verification
+│   │   ├── inventory/                    # Inventory CRUD
+│   │   ├── research/                     # Research projects CRUD
+│   │   ├── admin/                        # Admin user management
+│   │   └── users/                        # User profiles
+│   ├── entities/                         # TypeORM entities
+│   └── config/                          # NestJS config
+│
+hackathon-frontend/
+├── src/
+│   ├── pages/
+│   │   ├── user/                         # Dashboard, Research, Inventory, Lab Assistant
+│   │   ├── admin/                        # Admin panel
+│   │   └── auth/                         # Login, Register, MFA
+│   ├── hooks/
+│   │   └── useAgentChat.ts               # SSE streaming hook for AI chat
+│   ├── api/                              # Axios API client
+│   ├── stores/                           # Zustand auth store
+│   ├── components/
+│   │   ├── layout/                       # UserLayout (SpongeBob theme), AdminLayout
+│   │   ├── guards/                       # Auth, Admin, Guest guards
+│   │   └── ui/                           # Reusable UI components
+│   └── types/                            # TypeScript types
+```
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+## Scoring Alignment
+
+| Criteria | Points | Implementation |
+|----------|--------|---------------|
+| **AI Architecture** | 30 | LangGraph StateGraph with 4 agents, conditional routing, tool execution, SSE streaming |
+| **Functionality** | 25 | Research (Tavily search), Inventory (stock management), Database (CRUD), role-based access |
+| **UX/UI & SpongeBob Theme** | 15 | Ocean/sandy/coral/kelp color palette, Treedome Lab branding, underwater aesthetics |
+| **Innovation** | 15 | Multi-agent orchestration, real-time SSE streaming, Tavily + LLM dual search, MFA |
+| **Performance & Reliability** | 15 | Fallback mechanisms, mock mode, error handling, streaming responses |
+
+## Team
+
+Built for the CodeItUp 6.0 Hackathon — Sandy's Treedome Lab edition.
+
+---
+
+*"I'm ready! I'm ready! I'm ready!" — SpongeBob, probably also excited about multi-agent AI*

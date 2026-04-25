@@ -15,6 +15,7 @@ import { AgentTask } from '../../../entities/agent-task.entity';
 @Injectable()
 export class ToolExecutor {
   private readonly logger = new Logger(ToolExecutor.name);
+  private tavilyClient: any = null;
 
   constructor(
     @InjectRepository(Project)
@@ -33,7 +34,18 @@ export class ToolExecutor {
     private agentTaskRepo: Repository<AgentTask>,
     private httpService: HttpService,
     private configService: ConfigService,
-  ) {}
+  ) {
+    const tavilyKey = this.configService.get('TAVILY_API_KEY');
+    if (tavilyKey) {
+      try {
+        const { tavily } = require('@tavily/core');
+        this.tavilyClient = tavily({ apiKey: tavilyKey });
+        this.logger.log('Tavily web search initialized successfully');
+      } catch (err) {
+        this.logger.warn(`Tavily init failed, falling back to LLM search: ${err.message}`);
+      }
+    }
+  }
 
   async execute(
     toolName: string,
@@ -91,6 +103,46 @@ export class ToolExecutor {
 
   private async webSearch(args: any, onProgress: (msg: string) => void) {
     onProgress(`Searching web: "${args.query}"`);
+    const count = args.count || 5;
+
+    if (this.tavilyClient) {
+      try {
+        const response = await this.tavilyClient.search(args.query, {
+          maxResults: count,
+          searchDepth: 'advanced',
+          includeAnswer: true,
+        });
+
+        const results = (response.results || []).map((r: any) => ({
+          title: r.title || 'Untitled',
+          content: r.content?.substring(0, 500) || '',
+          link: r.url || '',
+          media: '',
+        }));
+
+        const answer = response.answer || '';
+
+        await this.researchCacheRepo.save({
+          topic: args.query,
+          summary: (answer || results.map(r => r.content).join('\n')).substring(0, 500),
+          source: 'tavily_search',
+        });
+
+        await this.logAiAction('web_search', { query: args.query }, { source: 'tavily', count: results.length });
+
+        onProgress(`Found ${results.length} web results via Tavily`);
+
+        return {
+          results,
+          answer,
+          source: 'Tavily web search',
+        };
+      } catch (error) {
+        this.logger.warn(`Tavily search failed: ${error.message}, falling back to LLM search`);
+      }
+    }
+
+    onProgress('Tavily unavailable, using LLM-assisted search...');
     const apiKey = this.configService.get('OPENROUTER_API_KEY');
     const model = this.configService.get('AI_MODEL', 'openai/gpt-4o-mini');
 
@@ -125,7 +177,7 @@ export class ToolExecutor {
 
       await this.logAiAction('web_search', { query: args.query }, { source: 'llm', length: content.length });
 
-      onProgress(`Found research information`);
+      onProgress('Found research information via LLM');
 
       return {
         results: [{
@@ -134,11 +186,11 @@ export class ToolExecutor {
           link: '',
           media: '',
         }],
-        source: 'AI-generated research summary',
+        source: 'LLM-assisted research (Tavily unavailable)',
       };
     } catch (error) {
-      this.logger.warn(`Web search failed: ${error.message}`);
-      onProgress('Search failed, using cached data');
+      this.logger.warn(`LLM search also failed: ${error.message}`);
+      onProgress('Search failed, checking cached data...');
 
       const cached = await this.researchCacheRepo
         .createQueryBuilder('c')

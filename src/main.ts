@@ -52,9 +52,9 @@ async function bootstrap() {
 
   if (process.env.NODE_ENV !== 'production') {
     const config = new DocumentBuilder()
-      .setTitle('CodeItUp API')
+      .setTitle('Treedome Lab API')
       .setDescription(
-        'Secure Login System with Multi-Factor Authentication (MFA) API Documentation',
+        "Sandy's Treedome Lab — AI-powered lab management system with multi-agent orchestration",
       )
       .setVersion('1.0')
       .addBearerAuth()
