@@ -26,7 +26,11 @@ import { AgentGraph } from './agent.graph';
       AgentConversation,
       AgentMessage,
     ]),
-    HttpModule,
+    HttpModule.register({
+      timeout: 30000,
+      maxRedirects: 5,
+      validateStatus: () => true,
+    }),
   ],
   providers: [ToolExecutor, AgentGraph],
   exports: [AgentGraph, ToolExecutor],

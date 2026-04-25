@@ -50,6 +50,12 @@ export class AgentGraph {
     this.glm = new OpenAI({
       apiKey: this.configService.get('OPENROUTER_API_KEY'),
       baseURL: 'https://openrouter.ai/api/v1',
+      maxRetries: 3,
+      timeout: 30000,
+      defaultHeaders: {
+        'HTTP-Referer': 'https://treedome-lab.app',
+        'X-Title': 'Treedome Lab',
+      },
     });
     this.compiledGraph = this.buildGraph();
   }
@@ -112,13 +118,29 @@ export class AgentGraph {
       });
     }
 
-    const stream = (await this.glm.chat.completions.create({
-      model: this.model,
-      messages: messages as any,
-      tools: AGENT_CONFIGS.planner.tools as any,
-      tool_choice: 'auto',
-      stream: true,
-    } as any)) as any;
+    let stream: any;
+    let lastError: any;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        stream = await this.glm.chat.completions.create({
+          model: this.model,
+          messages: messages as any,
+          tools: AGENT_CONFIGS.planner.tools as any,
+          tool_choice: 'auto',
+          stream: true,
+        } as any);
+        break;
+      } catch (err: any) {
+        lastError = err;
+        this.logger.warn(`Planner API attempt ${attempt + 1} failed: ${err.message}`);
+        if (attempt < 2) {
+          await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
+        }
+      }
+    }
+    if (!stream) {
+      throw lastError;
+    }
 
     let reasoning = '';
     let content = '';

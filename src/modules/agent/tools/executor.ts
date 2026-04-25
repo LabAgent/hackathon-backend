@@ -165,47 +165,60 @@ export class ToolExecutor {
     const count = args.count || 5;
 
     if (this.tavilyClient) {
-      try {
-        const response = await this.tavilyClient.search(args.query, {
-          maxResults: count,
-          searchDepth: 'advanced',
-          includeAnswer: true,
-        });
+      let tavilyResponse: any = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          tavilyResponse = await this.tavilyClient.search(args.query, {
+            maxResults: count,
+            searchDepth: 'advanced',
+            includeAnswer: true,
+          });
+          break;
+        } catch (err: any) {
+          this.logger.warn(`Tavily attempt ${attempt + 1} failed: ${err.message}`);
+          if (attempt < 2) {
+            await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
+          }
+        }
+      }
+      if (tavilyResponse) {
+        try {
+          const response = tavilyResponse;
+          const results = (response.results || []).map((r: any) => ({
+            title: r.title || 'Untitled',
+            content: r.content?.substring(0, 500) || '',
+            link: r.url || '',
+            media: '',
+          }));
 
-        const results = (response.results || []).map((r: any) => ({
-          title: r.title || 'Untitled',
-          content: r.content?.substring(0, 500) || '',
-          link: r.url || '',
-          media: '',
-        }));
+          const answer = response.answer || '';
 
-        const answer = response.answer || '';
+          await this.researchCacheRepo.save({
+            topic: args.query,
+            summary: (
+              answer || results.map((r) => r.content).join('\n')
+            ).substring(0, 500),
+            source: 'tavily_search',
+          });
 
-        await this.researchCacheRepo.save({
-          topic: args.query,
-          summary: (
-            answer || results.map((r) => r.content).join('\n')
-          ).substring(0, 500),
-          source: 'tavily_search',
-        });
+          await this.logAiAction(
+            'web_search',
+            { query: args.query },
+            { source: 'tavily', count: results.length },
+          );
 
-        await this.logAiAction(
-          'web_search',
-          { query: args.query },
-          { source: 'tavily', count: results.length },
-        );
+          onProgress(`Found ${results.length} web results via Tavily`);
 
-        onProgress(`Found ${results.length} web results via Tavily`);
-
-        return {
-          results,
-          answer,
-          source: 'Tavily web search',
-        };
-      } catch (error) {
-        this.logger.warn(
-          `Tavily search failed: ${error.message}, falling back to LLM search`,
-        );
+          return {
+            results,
+            answer,
+            source: 'Tavily web search',
+          };
+        } catch (error) {
+          this.logger.warn(
+            `Tavily search failed: ${error.message}, falling back to LLM search`,
+          );
+        }
       }
     }
 
