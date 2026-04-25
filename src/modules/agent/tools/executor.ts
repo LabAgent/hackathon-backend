@@ -451,6 +451,9 @@ Format each hypothesis as a clear, falsifiable statement. Be specific and creati
   }
 
   private validateCreateData(table: string, data: any): { valid: boolean; message?: string; defaults?: any } {
+    if (!data || typeof data !== 'object') {
+      return { valid: false, message: `No data provided to create a record in "${table}". Please provide the required fields as a data object.` };
+    }
     switch (table) {
       case 'projects': {
         if (!data.name) return { valid: false, message: 'Field "name" is required to create a project. Please provide a project name.' };
@@ -479,7 +482,7 @@ Format each hypothesis as a clear, falsifiable statement. Be specific and creati
     const repo = this.getRepository(table);
     if (!repo) return { error: true, message: `Table "${table}" not accessible` };
 
-    const validation = this.validateCreateData(table, data);
+    const validation = this.validateCreateData(table, data ?? {});
     if (!validation.valid) {
       onProgress(`Validation failed: ${validation.message}`);
       return { error: true, message: validation.message };
