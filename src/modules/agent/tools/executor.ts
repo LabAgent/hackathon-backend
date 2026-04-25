@@ -450,15 +450,46 @@ Format each hypothesis as a clear, falsifiable statement. Be specific and creati
     return { records, count: records.length };
   }
 
+  private validateCreateData(table: string, data: any): { valid: boolean; message?: string; defaults?: any } {
+    switch (table) {
+      case 'projects': {
+        if (!data.name) return { valid: false, message: 'Field "name" is required to create a project. Please provide a project name.' };
+        return { valid: true, defaults: { status: data.status || 'planned', priority: data.priority ?? 1 } };
+      }
+      case 'inventory': {
+        if (!data.name) return { valid: false, message: 'Field "name" is required to create an inventory item. Please provide an item name.' };
+        return { valid: true, defaults: { quantity: data.quantity ?? 0, minRequired: data.minRequired ?? 5, unit: data.unit || 'units', category: data.category || 'other' } };
+      }
+      case 'experiments_log': {
+        if (!data.projectId) return { valid: false, message: 'Field "projectId" is required to create an experiment log. Please provide a project ID.' };
+        return { valid: true, defaults: { status: data.status || 'planned' } };
+      }
+      case 'agent_tasks': {
+        if (!data.task) return { valid: false, message: 'Field "task" is required to create an agent task. Please provide a task description.' };
+        return { valid: true, defaults: { status: data.status || 'pending' } };
+      }
+      default:
+        return { valid: true };
+    }
+  }
+
   private async createRecord(args: any, onProgress: (msg: string) => void) {
     const { table, data } = args;
     onProgress(`Creating record in ${table}...`);
     const repo = this.getRepository(table);
     if (!repo) return { error: true, message: `Table "${table}" not accessible` };
-    const record = repo.create(data);
+
+    const validation = this.validateCreateData(table, data);
+    if (!validation.valid) {
+      onProgress(`Validation failed: ${validation.message}`);
+      return { error: true, message: validation.message };
+    }
+
+    const mergedData = { ...(validation.defaults || {}), ...data };
+    const record = repo.create(mergedData);
     await repo.save(record);
     onProgress(`Record created: ${(record as any).id}`);
-    await this.logAiAction('create_record', { table, data }, { id: (record as any).id });
+    await this.logAiAction('create_record', { table, data: mergedData }, { id: (record as any).id });
     return { id: (record as any).id, created: true };
   }
 

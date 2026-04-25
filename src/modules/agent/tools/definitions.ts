@@ -142,12 +142,12 @@ export const DATABASE_TOOLS = [
     type: 'function',
     function: {
       name: 'create_record',
-      description: 'Create a new record in a database table.',
+      description: 'Create a new record in a database table. IMPORTANT: Each table has required fields that must be provided.\n- projects: requires "name" (string). Optional: description, status, priority.\n- inventory: requires "name" (string). Optional: quantity (default 0), unit (default "units"), category (default "other"), minRequired (default 5).\n- experiments_log: requires "projectId" (number). Optional: result, success, notes, hypothesis, methodology, status.\n- agent_tasks: requires "task" (string). Optional: status.',
       parameters: {
         type: 'object',
         properties: {
           table: { type: 'string', enum: ['projects', 'inventory', 'experiments_log', 'agent_tasks'] },
-          data: { type: 'object', description: 'Record data to create' },
+          data: { type: 'object', description: 'Record data to create. Must include all required fields for the table.' },
         },
         required: ['table', 'data'],
       },
