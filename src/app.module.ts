@@ -6,6 +6,10 @@ import { AppConfigService } from './config/app-config.service';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { ResearchModule } from './modules/research/research.module';
+import { InventoryModule } from './modules/inventory/inventory.module';
+import { AgentModule } from './modules/agent/agent.module';
+import { ChatModule } from './modules/chat/chat.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -38,7 +42,7 @@ function getSslConfig(sslEnabled: boolean) {
         database: configService.dbConfig.database,
         ssl: getSslConfig(configService.dbConfig.ssl),
         entities: [__dirname + '/entities/*.entity{.ts,.js}'],
-        synchronize: configService.dbConfig.synchronize,
+        synchronize: true,
         autoLoadEntities: true,
       }),
     }),
@@ -62,6 +66,10 @@ function getSslConfig(sslEnabled: boolean) {
     AuthModule,
     UsersModule,
     AdminModule,
+    ResearchModule,
+    InventoryModule,
+    AgentModule,
+    ChatModule,
   ],
   controllers: [AppController],
   providers: [AppService],

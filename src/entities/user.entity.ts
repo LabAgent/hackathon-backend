@@ -9,6 +9,8 @@ import {
 export enum UserRole {
   USER = 'user',
   ADMIN = 'admin',
+  RESEARCHER = 'researcher',
+  LAB_ASSISTANT = 'lab_assistant',
 }
 
 @Entity('users')
