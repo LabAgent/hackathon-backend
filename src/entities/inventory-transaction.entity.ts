@@ -25,7 +25,9 @@ export class InventoryTransaction {
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @ManyToOne(() => Inventory, (inventory) => inventory.transactions, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Inventory, (inventory) => inventory.transactions, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'inventory_id' })
   inventory: Inventory;
 }

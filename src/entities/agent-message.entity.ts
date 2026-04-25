@@ -23,7 +23,9 @@ export class AgentMessage {
   @Column({ type: 'uuid' })
   conversationId: string;
 
-  @ManyToOne(() => AgentConversation, (conv) => conv.messages, { onDelete: 'CASCADE' })
+  @ManyToOne(() => AgentConversation, (conv) => conv.messages, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'conversation_id' })
   conversation: AgentConversation;
 

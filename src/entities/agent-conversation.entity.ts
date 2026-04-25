@@ -18,7 +18,9 @@ export class AgentConversation {
   @Column({ name: 'user_id' })
   userId: string;
 
-  @OneToMany(() => AgentMessage, (message) => message.conversation, { cascade: true })
+  @OneToMany(() => AgentMessage, (message) => message.conversation, {
+    cascade: true,
+  })
   messages: AgentMessage[];
 
   @CreateDateColumn({ name: 'created_at' })

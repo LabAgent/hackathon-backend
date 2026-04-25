@@ -8,7 +8,9 @@ import { ResearchService as ProjectService } from './research.service';
 import { ResearchController as ProjectController } from './research.controller';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Project, ExperimentsLog, ProjectRequirement])],
+  imports: [
+    TypeOrmModule.forFeature([Project, ExperimentsLog, ProjectRequirement]),
+  ],
   controllers: [ProjectController],
   providers: [ProjectService, RolesGuard],
   exports: [ProjectService],

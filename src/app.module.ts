@@ -15,11 +15,11 @@ import { AppService } from './app.service';
 
 function getSslConfig(sslEnabled: boolean) {
   if (!sslEnabled) return false;
-  
+
   if (process.env.DB_SSL_REJECT_UNAUTHORIZED === 'false') {
     return { rejectUnauthorized: false };
   }
-  
+
   return {
     rejectUnauthorized: true,
     ca: process.env.DB_SSL_CA,

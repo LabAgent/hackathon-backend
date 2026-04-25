@@ -11,13 +11,14 @@ import {
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../../common/guards/roles.guard';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiBearerAuth,
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { ResearchService } from './research.service';
-import { CreateProjectDto, UpdateProjectDto, CreateExperimentLogDto, CreateProjectRequirementDto } from './dto';
+import {
+  CreateProjectDto,
+  UpdateProjectDto,
+  CreateExperimentLogDto,
+  CreateProjectRequirementDto,
+} from './dto';
 import { Roles } from '../../common/decorators';
 import { UserRole } from '../../entities/user.entity';
 

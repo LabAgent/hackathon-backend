@@ -1,5 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsOptional, IsNumber, Min, MinLength, MaxLength } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsNumber,
+  Min,
+  MinLength,
+  MaxLength,
+} from 'class-validator';
 
 export class CreateInventoryItemDto {
   @ApiProperty({ example: 'Hydrochloric Acid' })

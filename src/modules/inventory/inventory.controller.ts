@@ -12,11 +12,7 @@ import {
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../../common/guards/roles.guard';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiBearerAuth,
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { InventoryService } from './inventory.service';
 import { CreateInventoryItemDto, UpdateInventoryItemDto } from './dto';
 import { Roles } from '../../common/decorators';
@@ -63,7 +59,10 @@ export class InventoryController {
   @Put(':id')
   @Roles(UserRole.ADMIN, UserRole.LAB_ASSISTANT)
   @ApiOperation({ summary: 'Update inventory item' })
-  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateInventoryItemDto) {
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateInventoryItemDto,
+  ) {
     return this.inventoryService.update(id, dto);
   }
 

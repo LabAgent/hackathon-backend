@@ -57,7 +57,9 @@ export class ChatController {
     res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders();
 
-    res.write(`data: ${JSON.stringify({ type: 'conversation_id', conversationId })}\n\n`);
+    res.write(
+      `data: ${JSON.stringify({ type: 'conversation_id', conversationId })}\n\n`,
+    );
 
     const stream$ = await this.chatService.sendMessage(
       conversationId,
@@ -71,7 +73,9 @@ export class ChatController {
         res.write(`data: ${JSON.stringify(event)}\n\n`);
       },
       error: (err) => {
-        res.write(`data: ${JSON.stringify({ type: 'error', message: err.message })}\n\n`);
+        res.write(
+          `data: ${JSON.stringify({ type: 'error', message: err.message })}\n\n`,
+        );
         res.end();
       },
       complete: () => {
@@ -93,10 +97,7 @@ export class ChatController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Get conversation with messages' })
-  getConversation(
-    @Param('id') id: string,
-    @CurrentUser('id') userId: string,
-  ) {
+  getConversation(@Param('id') id: string, @CurrentUser('id') userId: string) {
     return this.chatService.getConversation(id, userId);
   }
 }

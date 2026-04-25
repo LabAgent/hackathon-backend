@@ -1,7 +1,4 @@
-import {
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Inventory } from '../../entities/inventory.entity';
@@ -31,7 +28,8 @@ export class InventoryService {
   }
 
   async findAll(category?: string): Promise<Inventory[]> {
-    const query = this.itemRepo.createQueryBuilder('item')
+    const query = this.itemRepo
+      .createQueryBuilder('item')
       .orderBy('item.name', 'ASC');
 
     if (category) {

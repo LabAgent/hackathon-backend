@@ -1,5 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsOptional, IsNumber, IsBoolean, Min, MinLength, MaxLength } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsNumber,
+  IsBoolean,
+  Min,
+  MinLength,
+  MaxLength,
+} from 'class-validator';
 
 export class CreateProjectDto {
   @ApiProperty({ example: 'Kelp Growth Analysis' })
@@ -8,7 +16,9 @@ export class CreateProjectDto {
   @MaxLength(255)
   name: string;
 
-  @ApiPropertyOptional({ example: 'Study of kelp growth rates under varying light conditions' })
+  @ApiPropertyOptional({
+    example: 'Study of kelp growth rates under varying light conditions',
+  })
   @IsOptional()
   @IsString()
   description?: string;
@@ -58,17 +68,23 @@ export class CreateExperimentLogDto {
   @IsString()
   notes?: string;
 
-  @ApiPropertyOptional({ example: 'Increased light exposure accelerates kelp growth' })
+  @ApiPropertyOptional({
+    example: 'Increased light exposure accelerates kelp growth',
+  })
   @IsOptional()
   @IsString()
   hypothesis?: string;
 
-  @ApiPropertyOptional({ example: 'Placed samples under controlled LED panels for 7 days' })
+  @ApiPropertyOptional({
+    example: 'Placed samples under controlled LED panels for 7 days',
+  })
   @IsOptional()
   @IsString()
   methodology?: string;
 
-  @ApiPropertyOptional({ enum: ['planned', 'in_progress', 'completed', 'failed'] })
+  @ApiPropertyOptional({
+    enum: ['planned', 'in_progress', 'completed', 'failed'],
+  })
   @IsOptional()
   @IsString()
   status?: string;

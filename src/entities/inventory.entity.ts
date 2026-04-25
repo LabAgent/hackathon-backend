@@ -34,7 +34,11 @@ export class Inventory {
   @Column({ type: 'text', nullable: true })
   description: string;
 
-  @Column({ type: 'timestamp', name: 'last_updated', default: () => 'CURRENT_TIMESTAMP' })
+  @Column({
+    type: 'timestamp',
+    name: 'last_updated',
+    default: () => 'CURRENT_TIMESTAMP',
+  })
   lastUpdated: Date;
 
   @OneToMany(() => ProjectRequirement, (pr) => pr.inventory)

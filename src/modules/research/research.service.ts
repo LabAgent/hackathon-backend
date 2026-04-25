@@ -1,13 +1,15 @@
-import {
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Project, ProjectStatus } from '../../entities/project.entity';
 import { ExperimentsLog } from '../../entities/experiments-log.entity';
 import { ProjectRequirement } from '../../entities/project-requirement.entity';
-import { CreateProjectDto, UpdateProjectDto, CreateExperimentLogDto, CreateProjectRequirementDto } from './dto';
+import {
+  CreateProjectDto,
+  UpdateProjectDto,
+  CreateExperimentLogDto,
+  CreateProjectRequirementDto,
+} from './dto';
 
 @Injectable()
 export class ResearchService {
@@ -57,7 +59,10 @@ export class ResearchService {
     await this.projectRepo.remove(project);
   }
 
-  async addExperimentLog(projectId: number, dto: CreateExperimentLogDto): Promise<ExperimentsLog> {
+  async addExperimentLog(
+    projectId: number,
+    dto: CreateExperimentLogDto,
+  ): Promise<ExperimentsLog> {
     await this.findOne(projectId);
     const log = this.experimentLogRepo.create({
       projectId,
@@ -71,7 +76,9 @@ export class ResearchService {
     return this.experimentLogRepo.save(log);
   }
 
-  async addRequirement(dto: CreateProjectRequirementDto): Promise<ProjectRequirement> {
+  async addRequirement(
+    dto: CreateProjectRequirementDto,
+  ): Promise<ProjectRequirement> {
     const req = this.requirementRepo.create({
       projectId: dto.projectId,
       inventoryId: dto.inventoryId,
@@ -82,9 +89,15 @@ export class ResearchService {
 
   async getStats() {
     const total = await this.projectRepo.count();
-    const ongoing = await this.projectRepo.count({ where: { status: ProjectStatus.ONGOING } });
-    const completed = await this.projectRepo.count({ where: { status: ProjectStatus.COMPLETED } });
-    const planned = await this.projectRepo.count({ where: { status: ProjectStatus.PLANNED } });
+    const ongoing = await this.projectRepo.count({
+      where: { status: ProjectStatus.ONGOING },
+    });
+    const completed = await this.projectRepo.count({
+      where: { status: ProjectStatus.COMPLETED },
+    });
+    const planned = await this.projectRepo.count({
+      where: { status: ProjectStatus.PLANNED },
+    });
     return { total, ongoing, completed, planned };
   }
 }

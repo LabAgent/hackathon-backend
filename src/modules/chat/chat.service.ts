@@ -34,7 +34,10 @@ export class ChatService {
   ) {}
 
   async createConversation(userId: string): Promise<AgentConversation> {
-    const conversation = this.conversationRepo.create({ userId, title: 'New Conversation' });
+    const conversation = this.conversationRepo.create({
+      userId,
+      title: 'New Conversation',
+    });
     return this.conversationRepo.save(conversation);
   }
 
@@ -45,7 +48,10 @@ export class ChatService {
     });
   }
 
-  async getConversation(id: string, userId: string): Promise<AgentConversation> {
+  async getConversation(
+    id: string,
+    userId: string,
+  ): Promise<AgentConversation> {
     const conv = await this.conversationRepo.findOne({ where: { id, userId } });
     if (!conv) throw new Error('Conversation not found');
     const messages = await this.messageRepo.find({
@@ -65,7 +71,9 @@ export class ChatService {
     const subject = new Subject<ProgressEvent>();
     this.progressSubjects.set(conversationId, subject);
 
-    const conversation = await this.conversationRepo.findOne({ where: { id: conversationId, userId } });
+    const conversation = await this.conversationRepo.findOne({
+      where: { id: conversationId, userId },
+    });
     if (!conversation) {
       subject.error(new Error('Conversation not found'));
       return subject.asObservable();
@@ -78,12 +86,14 @@ export class ChatService {
       await this.conversationRepo.save(conversation);
     }
 
-    this.runAgent(conversationId, userId, role, content, subject).catch((err) => {
-      this.logger.error(`Agent run failed: ${err.message}`);
-      subject.next({ type: 'error', message: err.message });
-      subject.complete();
-      this.progressSubjects.delete(conversationId);
-    });
+    this.runAgent(conversationId, userId, role, content, subject).catch(
+      (err) => {
+        this.logger.error(`Agent run failed: ${err.message}`);
+        subject.next({ type: 'error', message: err.message });
+        subject.complete();
+        this.progressSubjects.delete(conversationId);
+      },
+    );
 
     return subject.asObservable();
   }
@@ -102,7 +112,9 @@ export class ChatService {
     try {
       const result = await this.agentGraph.run(query, userId, role, onProgress);
 
-      const responseText = result.response || 'I was unable to generate a response. Please try again.';
+      const responseText =
+        result.response ||
+        'I was unable to generate a response. Please try again.';
       await this.saveMessage(
         conversationId,
         MessageRole.ASSISTANT,
@@ -111,19 +123,26 @@ export class ChatService {
         result.agentSteps,
       );
 
-      this.logger.log(`Saved assistant message for conversation ${conversationId}`);
+      this.logger.log(
+        `Saved assistant message for conversation ${conversationId}`,
+      );
 
       subject.next({ type: 'complete', data: result });
     } catch (error) {
-      this.logger.error(`Agent error in conversation ${conversationId}: ${error.message}`);
-      const errorResponse = 'I encountered an error processing your request. Please try again.';
+      this.logger.error(
+        `Agent error in conversation ${conversationId}: ${error.message}`,
+      );
+      const errorResponse =
+        'I encountered an error processing your request. Please try again.';
       await this.saveMessage(
         conversationId,
         MessageRole.ASSISTANT,
         errorResponse,
         null,
         [{ agent: 'planner', action: 'error', error: error.message }],
-      ).catch(e => this.logger.error(`Failed to save error message: ${e.message}`));
+      ).catch((e) =>
+        this.logger.error(`Failed to save error message: ${e.message}`),
+      );
 
       subject.next({ type: 'error', message: error.message });
     } finally {
@@ -149,10 +168,14 @@ export class ChatService {
         toolCalls: agentSteps || undefined,
       });
       const saved = await this.messageRepo.save(message);
-      this.logger.debug(`Saved ${role} message ${saved.id} in conversation ${conversationId}`);
+      this.logger.debug(
+        `Saved ${role} message ${saved.id} in conversation ${conversationId}`,
+      );
       return saved;
     } catch (error) {
-      this.logger.error(`Failed to save ${role} message in conversation ${conversationId}: ${error.message}`);
+      this.logger.error(
+        `Failed to save ${role} message in conversation ${conversationId}: ${error.message}`,
+      );
       throw error;
     }
   }

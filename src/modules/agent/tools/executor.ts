@@ -42,17 +42,76 @@ export class ToolExecutor {
         this.tavilyClient = tavily({ apiKey: tavilyKey });
         this.logger.log('Tavily web search initialized successfully');
       } catch (err) {
-        this.logger.warn(`Tavily init failed, falling back to LLM search: ${err.message}`);
+        this.logger.warn(
+          `Tavily init failed, falling back to LLM search: ${err.message}`,
+        );
       }
     }
   }
+
+  private readonly ROLE_PERMISSIONS: Record<string, string[]> = {
+    admin: [
+      'web_search',
+      'create_experiment_log',
+      'suggest_hypothesis',
+      'analyze_findings',
+      'check_stock',
+      'update_stock',
+      'alert_low_stock',
+      'suggest_reorder',
+      'query_records',
+      'create_record',
+      'update_record',
+      'delete_record',
+    ],
+    researcher: [
+      'web_search',
+      'create_experiment_log',
+      'suggest_hypothesis',
+      'analyze_findings',
+      'check_stock',
+      'alert_low_stock',
+      'suggest_reorder',
+      'query_records',
+      'create_record',
+      'update_record',
+    ],
+    lab_assistant: [
+      'check_stock',
+      'update_stock',
+      'alert_low_stock',
+      'suggest_reorder',
+      'query_records',
+      'create_record',
+    ],
+    user: [
+      'web_search',
+      'suggest_hypothesis',
+      'check_stock',
+      'alert_low_stock',
+      'suggest_reorder',
+      'query_records',
+    ],
+  };
 
   async execute(
     toolName: string,
     args: Record<string, any>,
     userId: string,
     onProgress: (msg: string) => void,
+    userRole: string = 'user',
   ): Promise<any> {
+    const allowed =
+      this.ROLE_PERMISSIONS[userRole] || this.ROLE_PERMISSIONS['user'];
+    if (!allowed.includes(toolName)) {
+      this.logger.warn(
+        `Role "${userRole}" denied access to tool "${toolName}"`,
+      );
+      return {
+        error: true,
+        message: `Your role (${userRole}) does not have permission to use the "${toolName}" tool. Allowed operations for your role: ${allowed.join(', ')}`,
+      };
+    }
     this.logger.log(`Executing tool: ${toolName}`);
     try {
       switch (toolName) {
@@ -124,11 +183,17 @@ export class ToolExecutor {
 
         await this.researchCacheRepo.save({
           topic: args.query,
-          summary: (answer || results.map(r => r.content).join('\n')).substring(0, 500),
+          summary: (
+            answer || results.map((r) => r.content).join('\n')
+          ).substring(0, 500),
           source: 'tavily_search',
         });
 
-        await this.logAiAction('web_search', { query: args.query }, { source: 'tavily', count: results.length });
+        await this.logAiAction(
+          'web_search',
+          { query: args.query },
+          { source: 'tavily', count: results.length },
+        );
 
         onProgress(`Found ${results.length} web results via Tavily`);
 
@@ -138,7 +203,9 @@ export class ToolExecutor {
           source: 'Tavily web search',
         };
       } catch (error) {
-        this.logger.warn(`Tavily search failed: ${error.message}, falling back to LLM search`);
+        this.logger.warn(
+          `Tavily search failed: ${error.message}, falling back to LLM search`,
+        );
       }
     }
 
@@ -153,8 +220,15 @@ export class ToolExecutor {
           {
             model,
             messages: [
-              { role: 'system', content: 'You are a research assistant. Provide factual, detailed information about the given topic. Include specific data, studies, and references where possible. Format your response as a list of findings.' },
-              { role: 'user', content: `Provide detailed research information about: ${args.query}. Include relevant facts, studies, and data.` },
+              {
+                role: 'system',
+                content:
+                  'You are a research assistant. Provide factual, detailed information about the given topic. Include specific data, studies, and references where possible. Format your response as a list of findings.',
+              },
+              {
+                role: 'user',
+                content: `Provide detailed research information about: ${args.query}. Include relevant facts, studies, and data.`,
+              },
             ],
             max_tokens: 800,
           },
@@ -167,7 +241,8 @@ export class ToolExecutor {
         ),
       );
 
-      const content = response.data?.choices?.[0]?.message?.content || 'No results found';
+      const content =
+        response.data?.choices?.[0]?.message?.content || 'No results found';
 
       await this.researchCacheRepo.save({
         topic: args.query,
@@ -175,17 +250,23 @@ export class ToolExecutor {
         source: 'llm_search',
       });
 
-      await this.logAiAction('web_search', { query: args.query }, { source: 'llm', length: content.length });
+      await this.logAiAction(
+        'web_search',
+        { query: args.query },
+        { source: 'llm', length: content.length },
+      );
 
       onProgress('Found research information via LLM');
 
       return {
-        results: [{
-          title: `Research: ${args.query}`,
-          content: content.substring(0, 500),
-          link: '',
-          media: '',
-        }],
+        results: [
+          {
+            title: `Research: ${args.query}`,
+            content: content.substring(0, 500),
+            link: '',
+            media: '',
+          },
+        ],
         source: 'LLM-assisted research (Tavily unavailable)',
       };
     } catch (error) {
@@ -200,9 +281,13 @@ export class ToolExecutor {
         .getMany();
 
       if (cached.length > 0) {
-        await this.logAiAction('web_search', { query: args.query }, { source: 'cache', count: cached.length });
+        await this.logAiAction(
+          'web_search',
+          { query: args.query },
+          { source: 'cache', count: cached.length },
+        );
         return {
-          results: cached.map(c => ({
+          results: cached.map((c) => ({
             title: `Cached: ${c.topic}`,
             content: c.summary?.substring(0, 500) || '',
             link: '',
@@ -212,17 +297,33 @@ export class ToolExecutor {
         };
       }
 
-      await this.logAiAction('web_search', { query: args.query }, { source: 'none' });
+      await this.logAiAction(
+        'web_search',
+        { query: args.query },
+        { source: 'none' },
+      );
       return {
-        results: [{ title: 'No results', content: 'Search is currently unavailable. Please try again later.', link: '', media: '' }],
+        results: [
+          {
+            title: 'No results',
+            content: 'Search is currently unavailable. Please try again later.',
+            link: '',
+            media: '',
+          },
+        ],
         source: 'fallback',
       };
     }
   }
 
-  private async createExperimentLog(args: any, onProgress: (msg: string) => void) {
+  private async createExperimentLog(
+    args: any,
+    onProgress: (msg: string) => void,
+  ) {
     onProgress(`Creating experiment log for project: ${args.projectId}`);
-    const project = await this.projectRepo.findOne({ where: { id: args.projectId } });
+    const project = await this.projectRepo.findOne({
+      where: { id: args.projectId },
+    });
     if (!project) return { error: true, message: 'Project not found' };
     const log = this.experimentLogRepo.create({
       projectId: args.projectId,
@@ -236,10 +337,18 @@ export class ToolExecutor {
     await this.experimentLogRepo.save(log);
     onProgress(`Experiment log created: ${log.id}`);
     await this.logAiAction('create_experiment_log', args, { id: log.id });
-    return { id: log.id, projectId: log.projectId, success: log.success, status: log.status };
+    return {
+      id: log.id,
+      projectId: log.projectId,
+      success: log.success,
+      status: log.status,
+    };
   }
 
-  private async suggestHypothesis(args: any, onProgress: (msg: string) => void) {
+  private async suggestHypothesis(
+    args: any,
+    onProgress: (msg: string) => void,
+  ) {
     onProgress('Generating hypotheses...');
 
     const cached = await this.researchCacheRepo
@@ -249,9 +358,10 @@ export class ToolExecutor {
       .limit(3)
       .getMany();
 
-    const cachedContext = cached.length > 0
-      ? cached.map(c => c.summary?.substring(0, 300)).join('\n')
-      : '';
+    const cachedContext =
+      cached.length > 0
+        ? cached.map((c) => c.summary?.substring(0, 300)).join('\n')
+        : '';
 
     try {
       const apiKey = this.configService.get('OPENROUTER_API_KEY');
@@ -267,7 +377,11 @@ Format each hypothesis as a clear, falsifiable statement. Be specific and creati
           {
             model,
             messages: [
-              { role: 'system', content: 'You are a scientific hypothesis generator. Always respond with exactly 3 numbered hypotheses.' },
+              {
+                role: 'system',
+                content:
+                  'You are a scientific hypothesis generator. Always respond with exactly 3 numbered hypotheses.',
+              },
               { role: 'user', content: prompt },
             ],
             max_tokens: 500,
@@ -284,19 +398,29 @@ Format each hypothesis as a clear, falsifiable statement. Be specific and creati
       const rawHypotheses = response.data?.choices?.[0]?.message?.content || '';
       const hypotheses = rawHypotheses
         .split('\n')
-        .filter((line: string) => line.trim().match(/^\d/) || line.trim().startsWith('-') || line.trim().startsWith('•'))
+        .filter(
+          (line: string) =>
+            line.trim().match(/^\d/) ||
+            line.trim().startsWith('-') ||
+            line.trim().startsWith('•'),
+        )
         .map((line: string) => line.replace(/^[\d\.\-•]+\s*/, '').trim())
         .filter((h: string) => h.length > 20);
 
       if (hypotheses.length === 0) {
+        const topic = args.topic || 'this topic';
         hypotheses.push(
-          `Based on "${args.topic}", hypothesis 1: The primary variable shows a positive correlation with the outcome measure.`,
-          `Hypothesis 2: Environmental factors significantly influence the observed patterns in ${args.topic}.`,
-          `Hypothesis 3: A non-linear relationship exists between the key variables in this domain.`,
+          `Regarding "${topic}", further empirical investigation is needed to formulate specific testable predictions. The available data is insufficient for a well-supported hypothesis.`,
+          `A systematic review of existing literature on "${topic}" is recommended before generating hypotheses. The current context does not provide enough evidence for a confident prediction.`,
+          `To advance understanding of "${topic}", controlled experiments should be designed with clearly defined independent and dependent variables based on the theoretical framework.`,
         );
       }
 
-      await this.logAiAction('suggest_hypothesis', { topic: args.topic }, { cached: !!cached.length, generated: true });
+      await this.logAiAction(
+        'suggest_hypothesis',
+        { topic: args.topic },
+        { cached: !!cached.length, generated: true },
+      );
 
       return {
         topic: args.topic,
@@ -304,16 +428,76 @@ Format each hypothesis as a clear, falsifiable statement. Be specific and creati
         note: 'These hypotheses were AI-generated and should be validated through controlled experiments.',
       };
     } catch (error) {
-      this.logger.warn(`Hypothesis generation failed, using fallback: ${error.message}`);
-      await this.logAiAction('suggest_hypothesis', { topic: args.topic }, { cached: !!cached.length, fallback: true });
+      this.logger.warn(`Hypothesis generation failed: ${error.message}`);
+      await this.logAiAction(
+        'suggest_hypothesis',
+        { topic: args.topic },
+        { cached: !!cached.length, failed: true },
+      );
+
+      let fallbackHypotheses: string[];
+      if (cached.length > 0) {
+        const cachedText = cached
+          .map((c) => c.summary?.substring(0, 300))
+          .join('\n');
+        try {
+          const fbResponse = await firstValueFrom(
+            this.httpService.post<any>(
+              'https://openrouter.ai/api/v1/chat/completions',
+              {
+                model: this.configService.get('AI_MODEL', 'openai/gpt-4o-mini'),
+                messages: [
+                  {
+                    role: 'system',
+                    content:
+                      'Generate 3 specific, testable scientific hypotheses. Be concise.',
+                  },
+                  {
+                    role: 'user',
+                    content: `Topic: "${args.topic}". Context: ${cachedText}`,
+                  },
+                ],
+                max_tokens: 400,
+              },
+              {
+                headers: {
+                  Authorization: `Bearer ${this.configService.get('OPENROUTER_API_KEY')}`,
+                  'Content-Type': 'application/json',
+                },
+              },
+            ),
+          );
+          const fbContent =
+            fbResponse.data?.choices?.[0]?.message?.content || '';
+          fallbackHypotheses = fbContent
+            .split('\n')
+            .filter(
+              (line: string) =>
+                line.trim().match(/^\d/) ||
+                line.trim().startsWith('-') ||
+                line.trim().startsWith('•'),
+            )
+            .map((line: string) => line.replace(/^[\d\.\-•]+\s*/, '').trim())
+            .filter((h: string) => h.length > 20);
+        } catch {
+          fallbackHypotheses = [];
+        }
+      } else {
+        fallbackHypotheses = [];
+      }
+
+      if (fallbackHypotheses.length === 0) {
+        fallbackHypotheses = [
+          `Based on available knowledge about "${args.topic}", further research is needed to establish a concrete hypothesis. Consider designing a controlled experiment to gather preliminary data.`,
+          `The current understanding of "${args.topic}" suggests multiple variables may interact. A systematic literature review is recommended to identify key variables before formulating predictions.`,
+          `To advance knowledge about "${args.topic}", propose an observational study to collect baseline data, which will enable the generation of evidence-based hypotheses in future iterations.`,
+        ];
+      }
+
       return {
         topic: args.topic,
-        hypotheses: [
-          `Based on "${args.topic}", hypothesis 1: The primary variable shows a positive correlation with the outcome measure.${cachedContext ? ` (Context: ${cachedContext.substring(0, 100)})` : ''}`,
-          `Hypothesis 2: Environmental factors significantly influence the observed patterns in ${args.topic}.`,
-          `Hypothesis 3: A non-linear relationship exists between the key variables in this domain.`,
-        ],
-        note: 'These are fallback hypotheses. AI generation was unavailable.',
+        hypotheses: fallbackHypotheses.slice(0, 3),
+        note: 'AI hypothesis generation was temporarily limited. These hypotheses are designed to guide further investigation.',
       };
     }
   }
@@ -327,34 +511,132 @@ Format each hypothesis as a clear, falsifiable statement. Be specific and creati
     if (!project) return { error: true, message: 'Project not found' };
 
     const experiments = project.experiments || [];
-    await this.logAiAction('analyze_findings', { projectId: args.projectId }, { experimentCount: experiments.length });
 
-    return {
-      projectName: project.name,
-      projectStatus: project.status,
-      totalExperiments: experiments.length,
-      successfulExperiments: experiments.filter(e => e.success === true).length,
-      question: args.question || 'General analysis',
-      analysis: `Project "${project.name}" (status: ${project.status}) has ${experiments.length} experiments, ${experiments.filter(e => e.success === true).length} successful.`,
-      experiments: experiments.map(e => ({
-        id: e.id,
-        result: e.result,
-        success: e.success,
-        notes: e.notes,
-      })),
-    };
+    const experimentData = experiments.map((e) => ({
+      id: e.id,
+      result: e.result,
+      success: e.success,
+      notes: e.notes,
+      hypothesis: e.hypothesis,
+      methodology: e.methodology,
+      status: e.status,
+    }));
+
+    const experimentSummary =
+      experimentData.length > 0
+        ? experimentData
+            .map(
+              (e, i) =>
+                `Experiment ${i + 1}: ${e.result || 'No result'} | Success: ${e.success === null ? 'Unknown' : e.success ? 'Yes' : 'No'} | Notes: ${e.notes || 'None'} | Hypothesis: ${e.hypothesis || 'None'} | Methodology: ${e.methodology || 'None'} | Status: ${e.status}`,
+            )
+            .join('\n')
+        : 'No experiments recorded yet.';
+
+    try {
+      const apiKey = this.configService.get('OPENROUTER_API_KEY');
+      const model = this.configService.get('AI_MODEL', 'openai/gpt-4o-mini');
+
+      const analysisPrompt = `You are Sandy Cheeks' Research Agent analyzing experiment findings for the Treedome Lab.
+
+Project: "${project.name}" (Status: ${project.status})
+Description: ${project.description || 'No description'}
+${args.question ? `Specific question: ${args.question}` : 'General analysis requested'}
+
+Experiment Data:
+${experimentSummary}
+
+Total experiments: ${experimentData.length}
+Successful: ${experimentData.filter((e) => e.success === true).length}
+Failed: ${experimentData.filter((e) => e.success === false).length}
+Unknown result: ${experimentData.filter((e) => e.success === null).length}
+
+Provide a thorough scientific analysis including:
+1. Summary of key findings
+2. Success/failure patterns
+3. Recommendations for next steps
+4. Any notable correlations or observations
+
+Use SpongeBob-themed scientific quips occasionally (e.g., "By Neptune's trident!", "Tartar sauce!").`;
+
+      const response = await firstValueFrom(
+        this.httpService.post<any>(
+          'https://openrouter.ai/api/v1/chat/completions',
+          {
+            model,
+            messages: [
+              {
+                role: 'system',
+                content:
+                  'You are a scientific research analyst. Provide detailed, evidence-based analysis.',
+              },
+              { role: 'user', content: analysisPrompt },
+            ],
+            max_tokens: 800,
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              'Content-Type': 'application/json',
+            },
+          },
+        ),
+      );
+
+      const analysis = response.data?.choices?.[0]?.message?.content || '';
+
+      await this.logAiAction(
+        'analyze_findings',
+        { projectId: args.projectId, question: args.question },
+        {
+          experimentCount: experimentData.length,
+          analysisGenerated: true,
+        },
+      );
+
+      return {
+        projectName: project.name,
+        projectStatus: project.status,
+        totalExperiments: experimentData.length,
+        successfulExperiments: experimentData.filter((e) => e.success === true)
+          .length,
+        question: args.question || 'General analysis',
+        analysis: analysis,
+        experiments: experimentData,
+      };
+    } catch (error) {
+      this.logger.warn(
+        `LLM analysis failed: ${error.message}, falling back to structured summary`,
+      );
+      await this.logAiAction(
+        'analyze_findings',
+        { projectId: args.projectId },
+        { experimentCount: experimentData.length, fallback: true },
+      );
+      return {
+        projectName: project.name,
+        projectStatus: project.status,
+        totalExperiments: experimentData.length,
+        successfulExperiments: experimentData.filter((e) => e.success === true)
+          .length,
+        question: args.question || 'General analysis',
+        analysis: `Project "${project.name}" (status: ${project.status}) has ${experimentData.length} experiment(s), ${experimentData.filter((e) => e.success === true).length} successful. AI analysis was temporarily unavailable — please try again for a detailed interpretation.`,
+        experiments: experimentData,
+      };
+    }
   }
 
   private async checkStock(args: any, onProgress: (msg: string) => void) {
     onProgress('Checking inventory stock...');
     const query = this.inventoryRepo.createQueryBuilder('item');
-    if (args.itemName) query.andWhere('item.name ILIKE :name', { name: `%${args.itemName}%` });
-    if (args.category) query.andWhere('item.category = :cat', { cat: args.category });
+    if (args.itemName)
+      query.andWhere('item.name ILIKE :name', { name: `%${args.itemName}%` });
+    if (args.category)
+      query.andWhere('item.category = :cat', { cat: args.category });
     if (args.lowStockOnly) query.andWhere('item.quantity <= item.min_required');
     const items = await query.orderBy('item.name', 'ASC').getMany();
     onProgress(`Found ${items.length} items`);
     return {
-      items: items.map(i => ({
+      items: items.map((i) => ({
         id: i.id,
         name: i.name,
         category: i.category,
@@ -368,7 +650,9 @@ Format each hypothesis as a clear, falsifiable statement. Be specific and creati
 
   private async updateStock(args: any, onProgress: (msg: string) => void) {
     onProgress(`Updating stock for item: ${args.itemId}`);
-    const item = await this.inventoryRepo.findOne({ where: { id: args.itemId } });
+    const item = await this.inventoryRepo.findOne({
+      where: { id: args.itemId },
+    });
     if (!item) return { error: true, message: 'Item not found' };
     const oldQty = item.quantity;
     const changeAmount = args.newQuantity - oldQty;
@@ -383,7 +667,11 @@ Format each hypothesis as a clear, falsifiable statement. Be specific and creati
     });
 
     onProgress(`Stock updated: ${oldQty} → ${args.newQuantity}`);
-    await this.logAiAction('update_stock', { itemId: args.itemId, oldQty, newQty: args.newQuantity }, { changeAmount });
+    await this.logAiAction(
+      'update_stock',
+      { itemId: args.itemId, oldQty, newQty: args.newQuantity },
+      { changeAmount },
+    );
     return {
       success: true,
       itemName: item.name,
@@ -403,7 +691,7 @@ Format each hypothesis as a clear, falsifiable statement. Be specific and creati
     onProgress(`Found ${items.length} low stock items`);
     return {
       alertCount: items.length,
-      alerts: items.map(i => ({
+      alerts: items.map((i) => ({
         id: i.id,
         name: i.name,
         category: i.category,
@@ -422,7 +710,7 @@ Format each hypothesis as a clear, falsifiable statement. Be specific and creati
       .getMany();
 
     return {
-      suggestions: lowStockItems.map(item => ({
+      suggestions: lowStockItems.map((item) => ({
         itemId: item.id,
         name: item.name,
         currentQuantity: item.quantity,
@@ -436,7 +724,8 @@ Format each hypothesis as a clear, falsifiable statement. Be specific and creati
     const { table, filters, limit = 20 } = args;
     onProgress(`Querying ${table}...`);
     const repo = this.getRepository(table);
-    if (!repo) return { error: true, message: `Table "${table}" not accessible` };
+    if (!repo)
+      return { error: true, message: `Table "${table}" not accessible` };
     const qb = repo.createQueryBuilder('t');
     if (filters) {
       Object.entries(filters).forEach(([key, value]) => {
@@ -446,29 +735,73 @@ Format each hypothesis as a clear, falsifiable statement. Be specific and creati
     qb.limit(Math.min(limit, 50));
     const records = await qb.getMany();
     onProgress(`Found ${records.length} records`);
-    await this.logAiAction('query_records', { table, filters }, { count: records.length });
+    await this.logAiAction(
+      'query_records',
+      { table, filters },
+      { count: records.length },
+    );
     return { records, count: records.length };
   }
 
-  private validateCreateData(table: string, data: any): { valid: boolean; message?: string; defaults?: any } {
+  private validateCreateData(
+    table: string,
+    data: any,
+  ): { valid: boolean; message?: string; defaults?: any } {
     if (!data || typeof data !== 'object') {
-      return { valid: false, message: `No data provided to create a record in "${table}". Please provide the required fields as a data object.` };
+      return {
+        valid: false,
+        message: `No data provided to create a record in "${table}". Please provide the required fields as a data object.`,
+      };
     }
     switch (table) {
       case 'projects': {
-        if (!data.name) return { valid: false, message: 'Field "name" is required to create a project. Please provide a project name.' };
-        return { valid: true, defaults: { status: data.status || 'planned', priority: data.priority ?? 1 } };
+        if (!data.name)
+          return {
+            valid: false,
+            message:
+              'Field "name" is required to create a project. Please provide a project name.',
+          };
+        return {
+          valid: true,
+          defaults: {
+            status: data.status || 'planned',
+            priority: data.priority ?? 1,
+          },
+        };
       }
       case 'inventory': {
-        if (!data.name) return { valid: false, message: 'Field "name" is required to create an inventory item. Please provide an item name.' };
-        return { valid: true, defaults: { quantity: data.quantity ?? 0, minRequired: data.minRequired ?? 5, unit: data.unit || 'units', category: data.category || 'other' } };
+        if (!data.name)
+          return {
+            valid: false,
+            message:
+              'Field "name" is required to create an inventory item. Please provide an item name.',
+          };
+        return {
+          valid: true,
+          defaults: {
+            quantity: data.quantity ?? 0,
+            minRequired: data.minRequired ?? 5,
+            unit: data.unit || 'units',
+            category: data.category || 'other',
+          },
+        };
       }
       case 'experiments_log': {
-        if (!data.projectId) return { valid: false, message: 'Field "projectId" is required to create an experiment log. Please provide a project ID.' };
+        if (!data.projectId)
+          return {
+            valid: false,
+            message:
+              'Field "projectId" is required to create an experiment log. Please provide a project ID.',
+          };
         return { valid: true, defaults: { status: data.status || 'planned' } };
       }
       case 'agent_tasks': {
-        if (!data.task) return { valid: false, message: 'Field "task" is required to create an agent task. Please provide a task description.' };
+        if (!data.task)
+          return {
+            valid: false,
+            message:
+              'Field "task" is required to create an agent task. Please provide a task description.',
+          };
         return { valid: true, defaults: { status: data.status || 'pending' } };
       }
       default:
@@ -480,7 +813,8 @@ Format each hypothesis as a clear, falsifiable statement. Be specific and creati
     const { table, data } = args;
     onProgress(`Creating record in ${table}...`);
     const repo = this.getRepository(table);
-    if (!repo) return { error: true, message: `Table "${table}" not accessible` };
+    if (!repo)
+      return { error: true, message: `Table "${table}" not accessible` };
 
     const validation = this.validateCreateData(table, data ?? {});
     if (!validation.valid) {
@@ -491,19 +825,28 @@ Format each hypothesis as a clear, falsifiable statement. Be specific and creati
     const mergedData = { ...(validation.defaults || {}), ...data };
     const record = repo.create(mergedData);
     await repo.save(record);
-    onProgress(`Record created: ${(record as any).id}`);
-    await this.logAiAction('create_record', { table, data: mergedData }, { id: (record as any).id });
-    return { id: (record as any).id, created: true };
+    onProgress(`Record created: ${record.id}`);
+    await this.logAiAction(
+      'create_record',
+      { table, data: mergedData },
+      { id: record.id },
+    );
+    return { id: record.id, created: true };
   }
 
   private async updateRecord(args: any, onProgress: (msg: string) => void) {
     const { table, id, data } = args;
     onProgress(`Updating record in ${table}...`);
     const repo = this.getRepository(table);
-    if (!repo) return { error: true, message: `Table "${table}" not accessible` };
+    if (!repo)
+      return { error: true, message: `Table "${table}" not accessible` };
     await repo.update(id, data);
     onProgress('Record updated');
-    await this.logAiAction('update_record', { table, id, data }, { updated: true });
+    await this.logAiAction(
+      'update_record',
+      { table, id, data },
+      { updated: true },
+    );
     return { id, updated: true };
   }
 
@@ -511,7 +854,8 @@ Format each hypothesis as a clear, falsifiable statement. Be specific and creati
     const { table, id } = args;
     onProgress(`Deleting record from ${table}...`);
     const repo = this.getRepository(table);
-    if (!repo) return { error: true, message: `Table "${table}" not accessible` };
+    if (!repo)
+      return { error: true, message: `Table "${table}" not accessible` };
     await repo.delete(id);
     onProgress('Record deleted');
     await this.logAiAction('delete_record', { table, id }, { deleted: true });
@@ -520,14 +864,22 @@ Format each hypothesis as a clear, falsifiable statement. Be specific and creati
 
   private getRepository(table: string): Repository<any> | null {
     switch (table) {
-      case 'projects': return this.projectRepo;
-      case 'inventory': return this.inventoryRepo;
-      case 'experiments_log': return this.experimentLogRepo;
-      case 'ai_actions_log': return this.aiActionLogRepo;
-      case 'research_cache': return this.researchCacheRepo;
-      case 'inventory_transactions': return this.transactionRepo;
-      case 'agent_tasks': return this.agentTaskRepo;
-      default: return null;
+      case 'projects':
+        return this.projectRepo;
+      case 'inventory':
+        return this.inventoryRepo;
+      case 'experiments_log':
+        return this.experimentLogRepo;
+      case 'ai_actions_log':
+        return this.aiActionLogRepo;
+      case 'research_cache':
+        return this.researchCacheRepo;
+      case 'inventory_transactions':
+        return this.transactionRepo;
+      case 'agent_tasks':
+        return this.agentTaskRepo;
+      default:
+        return null;
     }
   }
 }

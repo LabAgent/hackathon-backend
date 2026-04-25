@@ -44,7 +44,9 @@ export class ExperimentsLog {
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @ManyToOne(() => Project, (project) => project.experiments, { onDelete: 'SET NULL' })
+  @ManyToOne(() => Project, (project) => project.experiments, {
+    onDelete: 'SET NULL',
+  })
   @JoinColumn({ name: 'project_id' })
   project: Project;
 }

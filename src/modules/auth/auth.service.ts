@@ -230,7 +230,10 @@ export class AuthService {
           lockedUntil,
         });
         try {
-          await this.emailService.sendAccountLockedEmail(user.email, user.fullName);
+          await this.emailService.sendAccountLockedEmail(
+            user.email,
+            user.fullName,
+          );
         } catch (err) {
           this.logger.error('Failed to send account locked email', err);
         }
