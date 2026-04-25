@@ -51,6 +51,13 @@ export class ChatService {
       relations: ['messages'],
     });
     if (!conv) throw new Error('Conversation not found');
+    if (conv.messages) {
+      conv.messages.sort((a, b) => {
+        const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return ta - tb;
+      });
+    }
     return conv;
   }
 
@@ -100,22 +107,29 @@ export class ChatService {
     try {
       const result = await this.agentGraph.run(query, userId, role, onProgress);
 
+      const responseText = result.response || 'I was unable to generate a response. Please try again.';
       await this.saveMessage(
         conversationId,
         MessageRole.ASSISTANT,
-        result.response,
+        responseText,
         null,
         result.agentSteps,
       );
 
-      if (conversationId) {
-        await this.conversationRepo.update(conversationId, {
-          title: query.substring(0, 50),
-        });
-      }
+      this.logger.log(`Saved assistant message for conversation ${conversationId}`);
 
       subject.next({ type: 'complete', data: result });
     } catch (error) {
+      this.logger.error(`Agent error in conversation ${conversationId}: ${error.message}`);
+      const errorResponse = 'I encountered an error processing your request. Please try again.';
+      await this.saveMessage(
+        conversationId,
+        MessageRole.ASSISTANT,
+        errorResponse,
+        null,
+        [{ agent: 'planner', action: 'error', error: error.message }],
+      ).catch(e => this.logger.error(`Failed to save error message: ${e.message}`));
+
       subject.next({ type: 'error', message: error.message });
     } finally {
       subject.complete();
@@ -130,14 +144,21 @@ export class ChatService {
     reasoning?: string | null,
     agentSteps?: any[] | null,
   ): Promise<AgentMessage> {
-    const message = this.messageRepo.create({
-      conversationId,
-      role,
-      content,
-      reasoning: reasoning || undefined,
-      agentName: role === MessageRole.ASSISTANT ? 'planner' : undefined,
-      toolCalls: agentSteps || undefined,
-    });
-    return this.messageRepo.save(message);
+    try {
+      const message = this.messageRepo.create({
+        conversationId,
+        role,
+        content,
+        reasoning: reasoning || undefined,
+        agentName: role === MessageRole.ASSISTANT ? 'planner' : undefined,
+        toolCalls: agentSteps || undefined,
+      });
+      const saved = await this.messageRepo.save(message);
+      this.logger.debug(`Saved ${role} message ${saved.id} in conversation ${conversationId}`);
+      return saved;
+    } catch (error) {
+      this.logger.error(`Failed to save ${role} message in conversation ${conversationId}: ${error.message}`);
+      throw error;
+    }
   }
 }

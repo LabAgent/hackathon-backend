@@ -57,6 +57,8 @@ export class ChatController {
     res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders();
 
+    res.write(`data: ${JSON.stringify({ type: 'conversation_id', conversationId })}\n\n`);
+
     const stream$ = await this.chatService.sendMessage(
       conversationId,
       userId,
