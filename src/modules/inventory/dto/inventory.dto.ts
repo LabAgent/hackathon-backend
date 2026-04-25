@@ -29,6 +29,16 @@ export class CreateInventoryItemDto {
   @IsNumber()
   @Min(0)
   minRequired?: number;
+
+  @ApiPropertyOptional({ example: 'Shelf A3' })
+  @IsOptional()
+  @IsString()
+  location?: string;
+
+  @ApiPropertyOptional({ example: 'Concentrated HCl for lab use' })
+  @IsOptional()
+  @IsString()
+  description?: string;
 }
 
 export class UpdateInventoryItemDto {
@@ -63,4 +73,14 @@ export class UpdateInventoryItemDto {
   @IsOptional()
   @IsString()
   reason?: string;
+
+  @ApiPropertyOptional({ example: 'Shelf A3' })
+  @IsOptional()
+  @IsString()
+  location?: string;
+
+  @ApiPropertyOptional({ example: 'Concentrated HCl for lab use' })
+  @IsOptional()
+  @IsString()
+  description?: string;
 }

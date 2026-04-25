@@ -77,7 +77,7 @@ export class AuthService {
       email: normalizedEmail,
       passwordHash,
       fullName: dto.fullName,
-      role: UserRole.USER,
+      role: dto.role || UserRole.USER,
     });
     await this.userRepository.save(user);
 

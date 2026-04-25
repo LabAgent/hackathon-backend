@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import OpenAI from 'openai';
 import { ConfigService } from '@nestjs/config';
-import { PLANNER_TOOLS, RESEARCH_TOOLS, INVENTORY_TOOLS, DATABASE_TOOLS } from './tools/definitions';
 import { ToolExecutor } from './tools/executor';
+import { AGENT_CONFIGS } from './agents';
 
 interface AgentNodeConfig {
   name: string;
@@ -22,98 +22,22 @@ interface AgentState {
 
 type ProgressEmitter = (event: any) => void;
 
-const AGENT_CONFIGS: Record<string, AgentNodeConfig> = {
-  planner: {
-    name: 'Planner',
-    systemPrompt: `You are Sandy Cheeks' Lab Planner Agent — the central coordinator of the Treedome Lab AI system.
-
-Your job is to understand the user's request and delegate it to the appropriate specialist agent.
-
-Available agents:
-- **research**: For web search, experiment ideas, hypothesis generation, analyzing research findings, scientific questions
-- **inventory**: For checking stock levels, managing lab supplies, low stock alerts, reorder suggestions
-- **database**: For querying, creating, updating, or deleting records in research projects, experiments, or inventory
-
-Rules:
-1. Analyze the user's intent carefully
-2. Use route_to_agent to delegate to the MOST relevant agent
-3. If a request involves multiple agents, route to the primary one first
-4. After getting results back, synthesize a clear, helpful response
-5. Be enthusiastic and use SpongeBob-themed lab terminology occasionally
-6. Always explain what you're doing before routing`,
-    tools: PLANNER_TOOLS,
-  },
-  research: {
-    name: 'Research',
-    systemPrompt: `You are Sandy's Research Agent — a specialist in scientific research and web search.
-
-Your capabilities:
-- Search the web for scientific articles, papers, and information
-- Create experiment logs for projects
-- Suggest hypotheses based on research topics
-- Analyze findings from projects
-
-Rules:
-1. Use web_search to find relevant scientific information
-2. Use create_experiment_log to add experiment results to projects (requires projectId as number)
-3. Use suggest_hypothesis to generate hypotheses
-4. Use analyze_findings to review project data (requires projectId as number)
-5. Be thorough and cite your sources when providing web search results
-6. Present information in a structured, scientific manner`,
-    tools: RESEARCH_TOOLS,
-  },
-  inventory: {
-    name: 'Inventory',
-    systemPrompt: `You are Sandy's Inventory Agent — a specialist in lab inventory management.
-
-Your capabilities:
-- Check stock levels for any inventory item
-- Update stock quantities (automatically logs transactions)
-- Alert on low stock items
-- Suggest reorder quantities
-
-Rules:
-1. Use check_stock to look up items
-2. Use update_stock to change quantities (requires itemId as number, newQuantity as number)
-3. Use alert_low_stock to find items below min_required
-4. Use suggest_reorder for restocking recommendations
-5. Always confirm before making changes to stock
-6. Report quantities clearly with units`,
-    tools: INVENTORY_TOOLS,
-  },
-  database: {
-    name: 'Database',
-    systemPrompt: `You are Sandy's Database Agent — a specialist in safe database operations.
-
-Your capabilities:
-- Query records from: projects, inventory, experiments_log, ai_actions_log, research_cache, inventory_transactions, agent_tasks
-- Create new records in: projects, inventory, experiments_log, agent_tasks
-- Update existing records
-- Delete records
-
-Rules:
-1. Use query_records to fetch data with filters
-2. Use create_record to add new entries
-3. Use update_record to modify existing data (id is a number)
-4. Use delete_record to remove records (id is a number)
-5. Always confirm destructive operations
-6. Validate data before creating/updating records`,
-    tools: DATABASE_TOOLS,
-  },
-};
-
 @Injectable()
 export class AgentGraph {
   private readonly logger = new Logger(AgentGraph.name);
   private readonly glm: OpenAI;
+  private readonly mockMode: boolean;
+  private readonly model: string;
 
   constructor(
     private toolExecutor: ToolExecutor,
     private configService: ConfigService,
   ) {
+    this.mockMode = this.configService.get('MOCK_PIPELINE', 'false') === 'true';
+    this.model = this.configService.get('AI_MODEL', 'openai/gpt-4o-mini');
     this.glm = new OpenAI({
-      apiKey: this.configService.get('ZAI_API_KEY'),
-      baseURL: 'https://api.z.ai/api/paas/v4/',
+      apiKey: this.configService.get('OPENROUTER_API_KEY'),
+      baseURL: 'https://openrouter.ai/api/v1',
     });
   }
 
@@ -123,6 +47,10 @@ export class AgentGraph {
     role: string,
     onProgress: ProgressEmitter,
   ): Promise<{ response: string; agentSteps: any[] }> {
+    if (this.mockMode) {
+      return this.runMock(query, userId, role, onProgress);
+    }
+    // ... existing real code unchanged
     const state: AgentState = {
       query,
       userId,
@@ -184,7 +112,7 @@ export class AgentGraph {
     onProgress: ProgressEmitter,
   ): Promise<boolean> {
     const stream = await this.glm.chat.completions.create({
-      model: 'glm-5.1',
+      model: this.model,
       messages: state.messages,
       tools: agentConfig.tools,
       tool_choice: 'auto',
@@ -211,9 +139,9 @@ export class AgentGraph {
 
       if (delta.tool_calls) {
         for (const tc of delta.tool_calls) {
-          const idx = tc.index;
+          const idx = tc.index ?? 0;
           if (!toolCalls[idx]) {
-            toolCalls[idx] = { id: tc.id, function: { name: '', arguments: '' } };
+            toolCalls[idx] = { id: tc.id || '', function: { name: '', arguments: '' } };
           }
           if (tc.function?.name) toolCalls[idx].function.name += tc.function.name;
           if (tc.function?.arguments) toolCalls[idx].function.arguments += tc.function.arguments;
@@ -310,5 +238,160 @@ export class AgentGraph {
     }
 
     return false;
+  }
+
+  private async runMock(
+    query: string,
+    userId: string,
+    role: string,
+    onProgress: ProgressEmitter,
+  ): Promise<{ response: string; agentSteps: any[] }> {
+    const steps: any[] = [];
+    const lower = query.toLowerCase();
+
+    onProgress({ type: 'agent_start', agent: 'planner', message: 'Planner Agent analyzing your request...' });
+    await this.delay(300);
+
+    const isInventoryQuery = /stock|inventory|item|supply|reorder|low|alert|quantity/i.test(lower);
+    const isResearchQuery = /search|research|paper|study|hypothesis|experiment|find/i.test(lower);
+    const isDatabaseQuery = /show|list|query|record|project|create|delete|update|all\s+(project|inventory|experiment)/i.test(lower);
+
+    let agent = 'database';
+    let task = '';
+    let response = '';
+
+    if (isInventoryQuery) {
+      agent = 'inventory';
+      task = 'Handle inventory-related query';
+    } else if (isResearchQuery) {
+      agent = 'research';
+      task = 'Handle research-related query';
+    } else {
+      agent = 'database';
+      task = 'Handle database-related query';
+    }
+
+    onProgress({ type: 'route', from: 'planner', to: agent, task });
+    steps.push({ agent: 'planner', action: 'route', target: agent, task });
+    await this.delay(200);
+
+    onProgress({ type: 'agent_start', agent, message: `${agent.charAt(0).toUpperCase() + agent.slice(1)} Agent working...` });
+
+    onProgress({ type: 'reasoning', agent, chunk: 'Analyzing the request and determining the best approach...' });
+    await this.delay(500);
+
+    let toolName = '';
+    let toolArgs: any = {};
+
+    if (agent === 'inventory') {
+      if (/low|alert|below|threshold/i.test(lower)) {
+        toolName = 'alert_low_stock';
+        toolArgs = {};
+      } else if (/reorder|restock|order/i.test(lower)) {
+        toolName = 'suggest_reorder';
+        toolArgs = {};
+      } else {
+        toolName = 'check_stock';
+        toolArgs = /chemical|equipment|specimen|tool/i.test(lower) ? { category: lower.match(/chemical|equipment|specimen|tool/i)?.[0]?.toLowerCase() } : {};
+      }
+    } else if (agent === 'research') {
+      if (/hypothesis/i.test(lower)) {
+        toolName = 'suggest_hypothesis';
+        toolArgs = { topic: query };
+      } else {
+        toolName = 'web_search';
+        toolArgs = { query };
+      }
+    } else {
+      if (/project/i.test(lower) && /list|show|all/i.test(lower)) {
+        toolName = 'query_records';
+        toolArgs = { table: 'projects' };
+      } else if (/experiment/i.test(lower)) {
+        toolName = 'query_records';
+        toolArgs = { table: 'experiments_log' };
+      } else if (/create|add|new/i.test(lower) && /project/i.test(lower)) {
+        toolName = 'create_record';
+        toolArgs = { table: 'projects', data: { name: query.replace(/^(create|add|new)\s+/i, '').replace(/\s*project\s*/i, 'Project'), status: 'planned', priority: 1 } };
+      } else {
+        toolName = 'query_records';
+        toolArgs = { table: 'projects' };
+      }
+    }
+
+    onProgress({ type: 'tool_call', agent, tool: toolName, args: toolArgs });
+    steps.push({ agent, action: 'tool_call', tool: toolName, args: toolArgs });
+
+    const result = await this.toolExecutor.execute(toolName, toolArgs, userId, (msg) => {
+      onProgress({ type: 'tool_progress', agent, message: msg });
+    });
+
+    onProgress({ type: 'tool_result', agent, tool: toolName, result: JSON.stringify(result).substring(0, 200) });
+    steps.push({ agent, action: 'tool_call', tool: toolName, args: toolArgs, resultSummary: JSON.stringify(result).substring(0, 100) });
+
+    onProgress({ type: 'reasoning', agent, chunk: 'Now synthesizing the results for the user...' });
+    await this.delay(400);
+
+    if (agent === 'inventory') {
+      if (toolName === 'alert_low_stock') {
+        const count = (result as any)?.alertCount ?? 0;
+        const items = (result as any)?.alerts ?? [];
+        response = `I found **${count} items** below minimum threshold:\n\n`;
+        for (const item of items.slice(0, 5)) {
+          response += `- **${item.name}**: ${item.quantity}/${item.minRequired} ${item.unit || 'units'} (deficit: ${item.deficit})\n`;
+        }
+        if (count > 0) response += '\nI recommend prioritizing the most critical items for reorder.';
+      } else if (toolName === 'suggest_reorder') {
+        const suggestions = (result as any)?.suggestions ?? [];
+        response = `Here are my reorder suggestions:\n\n`;
+        for (const s of suggestions.slice(0, 5)) {
+          response += `- **${s.name}**: Current ${s.currentQuantity}, suggested order: ${s.suggestedOrder}\n`;
+        }
+      } else {
+        const items = (result as any)?.items ?? [];
+        response = `I found **${items.length} inventory items**:\n\n`;
+        for (const item of items.slice(0, 8)) {
+          const status = item.status === 'LOW' ? ' 🔴 LOW' : ' ✅ OK';
+          response += `- **${item.name}**: ${item.quantity} ${item.unit || ''}${status}\n`;
+        }
+        if (items.length > 8) response += `\n...and ${items.length - 8} more items.`;
+      }
+    } else if (agent === 'research') {
+      if (toolName === 'suggest_hypothesis') {
+        const hypotheses = (result as any)?.hypotheses ?? [];
+        response = `Here are suggested hypotheses for "${(result as any)?.topic}":\n\n`;
+        hypotheses.forEach((h: string, i: number) => {
+          response += `${i + 1}. ${h}\n\n`;
+        });
+        response += (result as any)?.note || '';
+      } else {
+        const results = (result as any)?.results ?? [];
+        response = `I found **${results.length} results** for your search:\n\n`;
+        for (const r of results.slice(0, 5)) {
+          response += `1. **${r.title}**\n   ${r.content?.substring(0, 150)}...\n\n`;
+        }
+      }
+    } else {
+      const records = (result as any)?.records ?? [];
+      const count = (result as any)?.count ?? records.length;
+      if (toolName === 'create_record') {
+        response = `I've created the record successfully! ID: ${(result as any)?.id}`;
+      } else {
+        response = `I found **${count} records**:\n\n`;
+        for (const r of records.slice(0, 5)) {
+          const name = r.name || r.title || r.task || `Record #${r.id}`;
+          const status = r.status ? ` (${r.status})` : '';
+          response += `- **${name}**${status}\n`;
+        }
+        if (count > 5) response += `\n...and ${count - 5} more.`;
+      }
+    }
+
+    onProgress({ type: 'content', agent: 'planner', chunk: response });
+
+    return { response, agentSteps: steps };
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 }

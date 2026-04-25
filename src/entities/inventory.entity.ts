@@ -28,6 +28,12 @@ export class Inventory {
   @Column({ type: 'integer', name: 'min_required', default: 0 })
   minRequired: number;
 
+  @Column({ type: 'text', nullable: true })
+  location: string;
+
+  @Column({ type: 'text', nullable: true })
+  description: string;
+
   @Column({ type: 'timestamp', name: 'last_updated', default: () => 'CURRENT_TIMESTAMP' })
   lastUpdated: Date;
 

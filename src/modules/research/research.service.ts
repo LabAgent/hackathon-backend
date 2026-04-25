@@ -64,6 +64,9 @@ export class ResearchService {
       result: dto.result,
       success: dto.success,
       notes: dto.notes,
+      hypothesis: dto.hypothesis,
+      methodology: dto.methodology,
+      status: dto.status || 'planned',
     });
     return this.experimentLogRepo.save(log);
   }

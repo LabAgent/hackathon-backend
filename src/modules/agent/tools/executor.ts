@@ -91,43 +91,81 @@ export class ToolExecutor {
 
   private async webSearch(args: any, onProgress: (msg: string) => void) {
     onProgress(`Searching web: "${args.query}"`);
-    const apiKey = this.configService.get('ZAI_API_KEY');
-    const response = await firstValueFrom(
-      this.httpService.post<any>(
-        'https://api.z.ai/api/paas/v4/web_search',
-        {
-          search_engine: 'search-prime',
-          search_query: args.query,
-          count: args.count || 5,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
+    const apiKey = this.configService.get('OPENROUTER_API_KEY');
+    const model = this.configService.get('AI_MODEL', 'openai/gpt-4o-mini');
+
+    try {
+      const response = await firstValueFrom(
+        this.httpService.post<any>(
+          'https://openrouter.ai/api/v1/chat/completions',
+          {
+            model,
+            messages: [
+              { role: 'system', content: 'You are a research assistant. Provide factual, detailed information about the given topic. Include specific data, studies, and references where possible. Format your response as a list of findings.' },
+              { role: 'user', content: `Provide detailed research information about: ${args.query}. Include relevant facts, studies, and data.` },
+            ],
+            max_tokens: 800,
           },
-        },
-      ),
-    );
-    const results = response.data?.search_result || [];
-    onProgress(`Found ${results.length} results`);
+          {
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              'Content-Type': 'application/json',
+            },
+          },
+        ),
+      );
 
-    const summary = results.map((r: any) => r.content?.substring(0, 200)).join(' ');
-    await this.researchCacheRepo.save({
-      topic: args.query,
-      summary,
-      source: 'web_search',
-    });
+      const content = response.data?.choices?.[0]?.message?.content || 'No results found';
 
-    await this.logAiAction('web_search', { query: args.query }, { count: results.length });
+      await this.researchCacheRepo.save({
+        topic: args.query,
+        summary: content.substring(0, 500),
+        source: 'llm_search',
+      });
 
-    return {
-      results: results.map((r: any) => ({
-        title: r.title,
-        content: r.content?.substring(0, 500),
-        link: r.link,
-        media: r.media,
-      })),
-    };
+      await this.logAiAction('web_search', { query: args.query }, { source: 'llm', length: content.length });
+
+      onProgress(`Found research information`);
+
+      return {
+        results: [{
+          title: `Research: ${args.query}`,
+          content: content.substring(0, 500),
+          link: '',
+          media: '',
+        }],
+        source: 'AI-generated research summary',
+      };
+    } catch (error) {
+      this.logger.warn(`Web search failed: ${error.message}`);
+      onProgress('Search failed, using cached data');
+
+      const cached = await this.researchCacheRepo
+        .createQueryBuilder('c')
+        .where('c.topic ILIKE :topic', { topic: `%${args.query}%` })
+        .orderBy('c.created_at', 'DESC')
+        .limit(3)
+        .getMany();
+
+      if (cached.length > 0) {
+        await this.logAiAction('web_search', { query: args.query }, { source: 'cache', count: cached.length });
+        return {
+          results: cached.map(c => ({
+            title: `Cached: ${c.topic}`,
+            content: c.summary?.substring(0, 500) || '',
+            link: '',
+            media: '',
+          })),
+          source: 'cached research data',
+        };
+      }
+
+      await this.logAiAction('web_search', { query: args.query }, { source: 'none' });
+      return {
+        results: [{ title: 'No results', content: 'Search is currently unavailable. Please try again later.', link: '', media: '' }],
+        source: 'fallback',
+      };
+    }
   }
 
   private async createExperimentLog(args: any, onProgress: (msg: string) => void) {
@@ -139,11 +177,14 @@ export class ToolExecutor {
       result: args.result,
       success: args.success,
       notes: args.notes,
+      hypothesis: args.hypothesis,
+      methodology: args.methodology,
+      status: args.status || 'planned',
     });
     await this.experimentLogRepo.save(log);
     onProgress(`Experiment log created: ${log.id}`);
     await this.logAiAction('create_experiment_log', args, { id: log.id });
-    return { id: log.id, projectId: log.projectId, success: log.success };
+    return { id: log.id, projectId: log.projectId, success: log.success, status: log.status };
   }
 
   private async suggestHypothesis(args: any, onProgress: (msg: string) => void) {
@@ -153,22 +194,76 @@ export class ToolExecutor {
       .createQueryBuilder('c')
       .where('c.topic ILIKE :topic', { topic: `%${args.topic}%` })
       .orderBy('c.created_at', 'DESC')
-      .limit(1)
-      .getOne();
+      .limit(3)
+      .getMany();
 
-    const cachedContext = cached ? ` (Using cached research: ${cached.summary?.substring(0, 100)})` : '';
+    const cachedContext = cached.length > 0
+      ? cached.map(c => c.summary?.substring(0, 300)).join('\n')
+      : '';
 
-    await this.logAiAction('suggest_hypothesis', { topic: args.topic }, { cached: !!cached });
+    try {
+      const apiKey = this.configService.get('OPENROUTER_API_KEY');
+      const model = this.configService.get('AI_MODEL', 'openai/gpt-4o-mini');
+      const prompt = `You are Sandy Cheeks' Research Agent. Generate 3 specific, testable scientific hypotheses about the topic: "${args.topic}".
+${cachedContext ? `Relevant research context:\n${cachedContext}\n` : ''}
+${args.existingData ? `Existing data:\n${args.existingData}\n` : ''}
+Format each hypothesis as a clear, falsifiable statement. Be specific and creative.`;
 
-    return {
-      topic: args.topic,
-      hypotheses: [
-        `Based on "${args.topic}", hypothesis 1: The primary variable shows a positive correlation with the outcome measure.${cachedContext}`,
-        `Hypothesis 2: Environmental factors significantly influence the observed patterns in ${args.topic}.`,
-        `Hypothesis 3: A non-linear relationship exists between the key variables in this domain.`,
-      ],
-      note: 'These hypotheses should be validated through controlled experiments.',
-    };
+      const response = await firstValueFrom(
+        this.httpService.post<any>(
+          'https://openrouter.ai/api/v1/chat/completions',
+          {
+            model,
+            messages: [
+              { role: 'system', content: 'You are a scientific hypothesis generator. Always respond with exactly 3 numbered hypotheses.' },
+              { role: 'user', content: prompt },
+            ],
+            max_tokens: 500,
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              'Content-Type': 'application/json',
+            },
+          },
+        ),
+      );
+
+      const rawHypotheses = response.data?.choices?.[0]?.message?.content || '';
+      const hypotheses = rawHypotheses
+        .split('\n')
+        .filter((line: string) => line.trim().match(/^\d/) || line.trim().startsWith('-') || line.trim().startsWith('•'))
+        .map((line: string) => line.replace(/^[\d\.\-•]+\s*/, '').trim())
+        .filter((h: string) => h.length > 20);
+
+      if (hypotheses.length === 0) {
+        hypotheses.push(
+          `Based on "${args.topic}", hypothesis 1: The primary variable shows a positive correlation with the outcome measure.`,
+          `Hypothesis 2: Environmental factors significantly influence the observed patterns in ${args.topic}.`,
+          `Hypothesis 3: A non-linear relationship exists between the key variables in this domain.`,
+        );
+      }
+
+      await this.logAiAction('suggest_hypothesis', { topic: args.topic }, { cached: !!cached.length, generated: true });
+
+      return {
+        topic: args.topic,
+        hypotheses: hypotheses.slice(0, 3),
+        note: 'These hypotheses were AI-generated and should be validated through controlled experiments.',
+      };
+    } catch (error) {
+      this.logger.warn(`Hypothesis generation failed, using fallback: ${error.message}`);
+      await this.logAiAction('suggest_hypothesis', { topic: args.topic }, { cached: !!cached.length, fallback: true });
+      return {
+        topic: args.topic,
+        hypotheses: [
+          `Based on "${args.topic}", hypothesis 1: The primary variable shows a positive correlation with the outcome measure.${cachedContext ? ` (Context: ${cachedContext.substring(0, 100)})` : ''}`,
+          `Hypothesis 2: Environmental factors significantly influence the observed patterns in ${args.topic}.`,
+          `Hypothesis 3: A non-linear relationship exists between the key variables in this domain.`,
+        ],
+        note: 'These are fallback hypotheses. AI generation was unavailable.',
+      };
+    }
   }
 
   private async analyzeFindings(args: any, onProgress: (msg: string) => void) {

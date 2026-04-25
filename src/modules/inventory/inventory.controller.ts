@@ -11,6 +11,7 @@ import {
   ParseIntPipe,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { RolesGuard } from '../../common/guards/roles.guard';
 import {
   ApiTags,
   ApiOperation,
@@ -18,15 +19,18 @@ import {
 } from '@nestjs/swagger';
 import { InventoryService } from './inventory.service';
 import { CreateInventoryItemDto, UpdateInventoryItemDto } from './dto';
+import { Roles } from '../../common/decorators';
+import { UserRole } from '../../entities/user.entity';
 
 @ApiTags('Inventory')
 @ApiBearerAuth()
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), RolesGuard)
 @Controller('inventory')
 export class InventoryController {
   constructor(private inventoryService: InventoryService) {}
 
   @Post()
+  @Roles(UserRole.ADMIN, UserRole.LAB_ASSISTANT)
   @ApiOperation({ summary: 'Add inventory item' })
   create(@Body() dto: CreateInventoryItemDto) {
     return this.inventoryService.create(dto);
@@ -57,12 +61,14 @@ export class InventoryController {
   }
 
   @Put(':id')
+  @Roles(UserRole.ADMIN, UserRole.LAB_ASSISTANT)
   @ApiOperation({ summary: 'Update inventory item' })
   update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateInventoryItemDto) {
     return this.inventoryService.update(id, dto);
   }
 
   @Delete(':id')
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Delete inventory item' })
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.inventoryService.remove(id);

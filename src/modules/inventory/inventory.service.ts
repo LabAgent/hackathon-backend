@@ -24,6 +24,8 @@ export class InventoryService {
       quantity: dto.quantity || 0,
       unit: dto.unit,
       minRequired: dto.minRequired || 0,
+      location: dto.location,
+      description: dto.description,
     });
     return this.itemRepo.save(item);
   }
@@ -51,6 +53,8 @@ export class InventoryService {
     if (dto.quantity !== undefined) item.quantity = dto.quantity;
     if (dto.unit !== undefined) item.unit = dto.unit;
     if (dto.minRequired !== undefined) item.minRequired = dto.minRequired;
+    if (dto.location !== undefined) item.location = dto.location;
+    if (dto.description !== undefined) item.description = dto.description;
     item.lastUpdated = new Date();
     const saved = await this.itemRepo.save(item);
 

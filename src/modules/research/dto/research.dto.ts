@@ -57,6 +57,21 @@ export class CreateExperimentLogDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @ApiPropertyOptional({ example: 'Increased light exposure accelerates kelp growth' })
+  @IsOptional()
+  @IsString()
+  hypothesis?: string;
+
+  @ApiPropertyOptional({ example: 'Placed samples under controlled LED panels for 7 days' })
+  @IsOptional()
+  @IsString()
+  methodology?: string;
+
+  @ApiPropertyOptional({ enum: ['planned', 'in_progress', 'completed', 'failed'] })
+  @IsOptional()
+  @IsString()
+  status?: string;
 }
 
 export class CreateProjectRequirementDto {
