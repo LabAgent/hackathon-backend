@@ -46,18 +46,13 @@ export class ChatService {
   }
 
   async getConversation(id: string, userId: string): Promise<AgentConversation> {
-    const conv = await this.conversationRepo.findOne({
-      where: { id, userId },
-      relations: ['messages'],
-    });
+    const conv = await this.conversationRepo.findOne({ where: { id, userId } });
     if (!conv) throw new Error('Conversation not found');
-    if (conv.messages) {
-      conv.messages.sort((a, b) => {
-        const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-        const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-        return ta - tb;
-      });
-    }
+    const messages = await this.messageRepo.find({
+      where: { conversationId: id },
+      order: { createdAt: 'ASC' },
+    });
+    (conv as any).messages = messages;
     return conv;
   }
 
