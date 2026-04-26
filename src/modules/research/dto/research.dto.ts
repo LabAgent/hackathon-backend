@@ -23,6 +23,11 @@ export class CreateProjectDto {
   @IsString()
   description?: string;
 
+  @ApiPropertyOptional({ enum: ['planned', 'ongoing', 'completed'] })
+  @IsOptional()
+  @IsString()
+  status?: string;
+
   @ApiPropertyOptional({ example: 1 })
   @IsOptional()
   @IsNumber()

@@ -28,7 +28,7 @@ export class ResearchService {
     const project = this.projectRepo.create({
       name: dto.name,
       description: dto.description,
-      status: ProjectStatus.PLANNED,
+      status: dto.status || ProjectStatus.PLANNED,
       priority: dto.priority || 1,
     });
     return this.projectRepo.save(project);
