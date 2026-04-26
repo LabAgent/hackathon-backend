@@ -334,12 +334,18 @@ export class ToolExecutor {
     onProgress: (msg: string) => void,
   ) {
     onProgress(`Creating experiment log for project: ${args.projectId}`);
-    const project = await this.projectRepo.findOne({
-      where: { id: args.projectId },
+    let project = await this.projectRepo.findOne({
+      where: { id: typeof args.projectId === 'number' ? args.projectId : parseInt(String(args.projectId), 10) || 0 },
     });
-    if (!project) return { error: true, message: 'Project not found' };
+    if (!project && typeof args.projectId === 'string') {
+      project = await this.projectRepo
+        .createQueryBuilder('p')
+        .where('p.name ILIKE :name', { name: `%${args.projectId}%` })
+        .getOne();
+    }
+    if (!project) return { error: true, message: `Project not found (searched for: "${args.projectId}")` };
     const log = this.experimentLogRepo.create({
-      projectId: args.projectId,
+      projectId: project.id,
       result: args.result,
       success: args.success,
       notes: args.notes,
@@ -517,11 +523,18 @@ Format each hypothesis as a clear, falsifiable statement. Be specific and creati
 
   private async analyzeFindings(args: any, onProgress: (msg: string) => void) {
     onProgress(`Analyzing findings for project: ${args.projectId}`);
-    const project = await this.projectRepo.findOne({
-      where: { id: args.projectId },
+    let project = await this.projectRepo.findOne({
+      where: { id: typeof args.projectId === 'number' ? args.projectId : parseInt(String(args.projectId), 10) || 0 },
       relations: ['experiments'],
     });
-    if (!project) return { error: true, message: 'Project not found' };
+    if (!project && typeof args.projectId === 'string') {
+      project = await this.projectRepo
+        .createQueryBuilder('p')
+        .where('p.name ILIKE :name', { name: `%${args.projectId}%` })
+        .leftJoinAndSelect('p.experiments', 'e')
+        .getOne();
+    }
+    if (!project) return { error: true, message: `Project not found (searched for: "${args.projectId}")` };
 
     const experiments = project.experiments || [];
 
@@ -742,7 +755,11 @@ Use SpongeBob-themed scientific quips occasionally (e.g., "By Neptune's trident!
     const qb = repo.createQueryBuilder('t');
     if (filters) {
       Object.entries(filters).forEach(([key, value]) => {
-        qb.andWhere(`t.${key} = :${key}`, { [key]: value });
+        if (key === 'name' || key.endsWith('Name') || key === 'title' || key === 'description') {
+          qb.andWhere(`t.${key} ILIKE :${key}`, { [key]: `%${value}%` });
+        } else {
+          qb.andWhere(`t.${key} = :${key}`, { [key]: value });
+        }
       });
     }
     qb.limit(Math.min(limit, 50));
@@ -768,17 +785,17 @@ Use SpongeBob-themed scientific quips occasionally (e.g., "By Neptune's trident!
     }
     switch (table) {
       case 'projects': {
-        if (!data.name)
+        if (!data.name || (typeof data.name === 'string' && !data.name.trim()))
           return {
             valid: false,
             message:
-              'Field "name" is required to create a project. Please provide a project name.',
+              'Field "name" is required to create a project. Pass it inside the "data" object, e.g.: {"table":"projects","data":{"name":"My Project","status":"planned","priority":2}}',
           };
         return {
           valid: true,
           defaults: {
             status: data.status || 'planned',
-            priority: data.priority ?? 1,
+            priority: typeof data.priority === 'string' ? parseInt(data.priority, 10) || 1 : (data.priority ?? 1),
           },
         };
       }
@@ -804,7 +821,7 @@ Use SpongeBob-themed scientific quips occasionally (e.g., "By Neptune's trident!
           return {
             valid: false,
             message:
-              'Field "projectId" is required to create an experiment log. Please provide a project ID.',
+              'Field "projectId" is required to create an experiment log. Pass it as a number or project name inside "data", e.g.: {"table":"experiments_log","data":{"projectId":1,"status":"planned"}}',
           };
         return { valid: true, defaults: { status: data.status || 'planned' } };
       }
@@ -823,13 +840,31 @@ Use SpongeBob-themed scientific quips occasionally (e.g., "By Neptune's trident!
   }
 
   private async createRecord(args: any, onProgress: (msg: string) => void) {
-    const { table, data } = args;
-    onProgress(`Creating record in ${table}...`);
+    const { table } = args;
+    let data = args.data;
+
+    if (typeof data === 'string') {
+      try { data = JSON.parse(data); } catch { data = {}; }
+    }
+
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+      const knownTopLevelKeys = ['table', 'id'];
+      const extracted: any = {};
+      for (const [k, v] of Object.entries(args)) {
+        if (!knownTopLevelKeys.includes(k) && typeof v !== 'function') {
+          extracted[k] = v;
+        }
+      }
+      if (Object.keys(extracted).length > 0) data = extracted;
+      else data = {};
+    }
+
+    onProgress(`Creating record in ${table} with data: ${JSON.stringify(data)}`);
     const repo = this.getRepository(table);
     if (!repo)
       return { error: true, message: `Table "${table}" not accessible` };
 
-    const validation = this.validateCreateData(table, data ?? {});
+    const validation = this.validateCreateData(table, data);
     if (!validation.valid) {
       onProgress(`Validation failed: ${validation.message}`);
       return { error: true, message: validation.message };
@@ -844,7 +879,7 @@ Use SpongeBob-themed scientific quips occasionally (e.g., "By Neptune's trident!
       { table, data: mergedData },
       { id: record.id },
     );
-    return { id: record.id, created: true };
+    return { id: record.id, created: true, table, name: mergedData.name || mergedData.task, status: mergedData.status };
   }
 
   private async updateRecord(args: any, onProgress: (msg: string) => void) {

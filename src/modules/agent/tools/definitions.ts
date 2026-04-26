@@ -23,11 +23,11 @@ export const RESEARCH_TOOLS = [
     type: 'function',
     function: {
       name: 'create_experiment_log',
-      description: 'Create a new experiment log entry for a project.',
+      description: 'Create a new experiment log entry for a project. The projectId can be a numeric ID or a project name (will be fuzzy-matched).',
       parameters: {
         type: 'object',
         properties: {
-          projectId: { type: 'number', description: 'ID of the project' },
+          projectId: { type: 'string', description: 'ID or name of the project' },
           result: {
             type: 'string',
             description: 'Experiment result description',
@@ -79,11 +79,11 @@ export const RESEARCH_TOOLS = [
     function: {
       name: 'analyze_findings',
       description:
-        'Analyze experiment results and findings for a project. Fetches experiment logs from the database.',
+        'Analyze experiment results and findings for a project. The projectId can be a numeric ID or a project name (will be fuzzy-matched). Fetches experiment logs from the database.',
       parameters: {
         type: 'object',
         properties: {
-          projectId: { type: 'number', description: 'ID of the project' },
+          projectId: { type: 'string', description: 'ID or name of the project' },
           question: {
             type: 'string',
             description: 'Specific question to answer from the findings',
@@ -167,8 +167,8 @@ export const DATABASE_TOOLS = [
   {
     type: 'function',
     function: {
-      name: 'query_records',
-      description: 'Query records from a database table with optional filters.',
+name: 'query_records',
+          description: 'Query records from a database table with optional filters. For text fields like "name", "title", or "description", partial case-insensitive matching is used. For other fields, exact matching is used.',
       parameters: {
         type: 'object',
         properties: {
@@ -203,7 +203,7 @@ export const DATABASE_TOOLS = [
     function: {
       name: 'create_record',
       description:
-        'Create a new record in a database table. IMPORTANT: Each table has required fields that must be provided.\n- projects: requires "name" (string). Optional: description, status, priority.\n- inventory: requires "name" (string). Optional: quantity (default 0), unit (default "units"), category (default "other"), minRequired (default 5).\n- experiments_log: requires "projectId" (number). Optional: result, success, notes, hypothesis, methodology, status.\n- agent_tasks: requires "task" (string). Optional: status.',
+        'Create a new record in a database table. The "data" field MUST be a JSON object containing all the record fields. IMPORTANT: Always nest fields inside the "data" object, NOT at the top level.\n- projects: requires "name" (string). Optional: description, status, priority (number).\n- inventory: requires "name" (string). Optional: quantity (number, default 0), unit (string, default "units"), category (string, default "other"), minRequired (number, default 5).\n- experiments_log: requires "projectId" (number or string). Optional: result, success (boolean), notes, hypothesis, methodology, status.\n- agent_tasks: requires "task" (string). Optional: status.',
       parameters: {
         type: 'object',
         properties: {
@@ -214,7 +214,7 @@ export const DATABASE_TOOLS = [
           data: {
             type: 'object',
             description:
-              'Record data to create. Must include all required fields for the table.',
+              'Record fields as a JSON object. All fields must be inside this object. Example for projects: {"name": "My Project", "status": "planned", "priority": 2}',
           },
         },
         required: ['table', 'data'],
