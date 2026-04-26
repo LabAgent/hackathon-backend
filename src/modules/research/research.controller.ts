@@ -17,7 +17,9 @@ import {
   CreateProjectDto,
   UpdateProjectDto,
   CreateExperimentLogDto,
+  UpdateExperimentLogDto,
   CreateProjectRequirementDto,
+  UpdateProjectRequirementDto,
 } from './dto';
 import { Roles } from '../../common/decorators';
 import { UserRole } from '../../entities/user.entity';
@@ -78,10 +80,44 @@ export class ResearchController {
     return this.projectService.addExperimentLog(projectId, dto);
   }
 
+  @Put('experiments/:expId')
+  @Roles(UserRole.ADMIN, UserRole.RESEARCHER)
+  @ApiOperation({ summary: 'Update experiment log' })
+  updateExperimentLog(
+    @Param('expId', ParseIntPipe) expId: number,
+    @Body() dto: UpdateExperimentLogDto,
+  ) {
+    return this.projectService.updateExperimentLog(expId, dto);
+  }
+
+  @Delete('experiments/:expId')
+  @Roles(UserRole.ADMIN, UserRole.RESEARCHER)
+  @ApiOperation({ summary: 'Delete experiment log' })
+  removeExperimentLog(@Param('expId', ParseIntPipe) expId: number) {
+    return this.projectService.removeExperimentLog(expId);
+  }
+
   @Post('requirements')
   @Roles(UserRole.ADMIN, UserRole.RESEARCHER)
   @ApiOperation({ summary: 'Add project requirement' })
   addRequirement(@Body() dto: CreateProjectRequirementDto) {
     return this.projectService.addRequirement(dto);
+  }
+
+  @Put('requirements/:reqId')
+  @Roles(UserRole.ADMIN, UserRole.RESEARCHER)
+  @ApiOperation({ summary: 'Update project requirement' })
+  updateRequirement(
+    @Param('reqId', ParseIntPipe) reqId: number,
+    @Body() dto: UpdateProjectRequirementDto,
+  ) {
+    return this.projectService.updateRequirement(reqId, dto);
+  }
+
+  @Delete('requirements/:reqId')
+  @Roles(UserRole.ADMIN, UserRole.RESEARCHER)
+  @ApiOperation({ summary: 'Delete project requirement' })
+  removeRequirement(@Param('reqId', ParseIntPipe) reqId: number) {
+    return this.projectService.removeRequirement(reqId);
   }
 }

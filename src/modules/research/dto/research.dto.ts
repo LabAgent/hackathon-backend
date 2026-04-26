@@ -90,6 +90,44 @@ export class CreateExperimentLogDto {
   status?: string;
 }
 
+export class UpdateExperimentLogDto {
+  @ApiPropertyOptional({ example: 'Light exposure increased growth by 40%' })
+  @IsOptional()
+  @IsString()
+  result?: string;
+
+  @ApiPropertyOptional({ example: true })
+  @IsOptional()
+  @IsBoolean()
+  success?: boolean;
+
+  @ApiPropertyOptional({ example: 'Controlled environment test' })
+  @IsOptional()
+  @IsString()
+  notes?: string;
+
+  @ApiPropertyOptional({
+    example: 'Increased light exposure accelerates kelp growth',
+  })
+  @IsOptional()
+  @IsString()
+  hypothesis?: string;
+
+  @ApiPropertyOptional({
+    example: 'Placed samples under controlled LED panels for 7 days',
+  })
+  @IsOptional()
+  @IsString()
+  methodology?: string;
+
+  @ApiPropertyOptional({
+    enum: ['planned', 'in_progress', 'completed', 'failed'],
+  })
+  @IsOptional()
+  @IsString()
+  status?: string;
+}
+
 export class CreateProjectRequirementDto {
   @ApiProperty({ example: 1 })
   @IsNumber()
@@ -103,4 +141,17 @@ export class CreateProjectRequirementDto {
   @IsNumber()
   @Min(1)
   requiredQuantity: number;
+}
+
+export class UpdateProjectRequirementDto {
+  @ApiPropertyOptional({ example: 2 })
+  @IsOptional()
+  @IsNumber()
+  inventoryId?: number;
+
+  @ApiPropertyOptional({ example: 15 })
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  requiredQuantity?: number;
 }

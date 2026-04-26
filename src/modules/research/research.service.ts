@@ -8,7 +8,9 @@ import {
   CreateProjectDto,
   UpdateProjectDto,
   CreateExperimentLogDto,
+  UpdateExperimentLogDto,
   CreateProjectRequirementDto,
+  UpdateProjectRequirementDto,
 } from './dto';
 
 @Injectable()
@@ -76,6 +78,31 @@ export class ResearchService {
     return this.experimentLogRepo.save(log);
   }
 
+  async updateExperimentLog(
+    experimentId: number,
+    dto: UpdateExperimentLogDto,
+  ): Promise<ExperimentsLog> {
+    const log = await this.experimentLogRepo.findOne({
+      where: { id: experimentId },
+    });
+    if (!log) throw new NotFoundException('Experiment log not found');
+    if (dto.result !== undefined) log.result = dto.result;
+    if (dto.success !== undefined) log.success = dto.success;
+    if (dto.notes !== undefined) log.notes = dto.notes;
+    if (dto.hypothesis !== undefined) log.hypothesis = dto.hypothesis;
+    if (dto.methodology !== undefined) log.methodology = dto.methodology;
+    if (dto.status !== undefined) log.status = dto.status;
+    return this.experimentLogRepo.save(log);
+  }
+
+  async removeExperimentLog(experimentId: number): Promise<void> {
+    const log = await this.experimentLogRepo.findOne({
+      where: { id: experimentId },
+    });
+    if (!log) throw new NotFoundException('Experiment log not found');
+    await this.experimentLogRepo.remove(log);
+  }
+
   async addRequirement(
     dto: CreateProjectRequirementDto,
   ): Promise<ProjectRequirement> {
@@ -85,6 +112,29 @@ export class ResearchService {
       requiredQuantity: dto.requiredQuantity,
     });
     return this.requirementRepo.save(req);
+  }
+
+  async updateRequirement(
+    requirementId: number,
+    dto: UpdateProjectRequirementDto,
+  ): Promise<ProjectRequirement> {
+    const req = await this.requirementRepo.findOne({
+      where: { id: requirementId },
+      relations: ['inventory'],
+    });
+    if (!req) throw new NotFoundException('Requirement not found');
+    if (dto.inventoryId !== undefined) req.inventoryId = dto.inventoryId;
+    if (dto.requiredQuantity !== undefined)
+      req.requiredQuantity = dto.requiredQuantity;
+    return this.requirementRepo.save(req);
+  }
+
+  async removeRequirement(requirementId: number): Promise<void> {
+    const req = await this.requirementRepo.findOne({
+      where: { id: requirementId },
+    });
+    if (!req) throw new NotFoundException('Requirement not found');
+    await this.requirementRepo.remove(req);
   }
 
   async getStats() {
