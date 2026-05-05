@@ -42,11 +42,52 @@ export class AgentGraph {
   private readonly model: string;
   private compiledGraph: any;
 
-  private sanitizeMessages(messages: any[]): any[] {
-    return messages.map((m) => {
-      const { reasoning_content, ...rest } = m;
-      return rest;
-    });
+  private sanitizeForApi(messages: any[], tools: any[]): any[] {
+    const toolNames = new Set(
+      tools.map((t: any) => t.function?.name).filter(Boolean),
+    );
+    const skipToolIds = new Set<string>();
+
+    return messages
+      .map((m) => {
+        const { reasoning_content, ...rest } = m;
+        return rest;
+      })
+      .filter((m) => {
+        if (m.role === 'tool' && skipToolIds.has(m.tool_call_id)) {
+          return false;
+        }
+
+        if (m.role === 'assistant' && m.tool_calls) {
+          const hasUnknownTools = m.tool_calls.some(
+            (tc: any) => !toolNames.has(tc.function?.name),
+          );
+          if (hasUnknownTools) {
+            for (const tc of m.tool_calls) {
+              skipToolIds.add(tc.id);
+            }
+            return m.content != null;
+          }
+        }
+
+        if (m.role === 'assistant' && !m.content && !m.tool_calls) {
+          return false;
+        }
+
+        return true;
+      })
+      .map((m) => {
+        if (m.role === 'assistant' && m.tool_calls) {
+          const hasUnknownTools = m.tool_calls.some(
+            (tc: any) => !toolNames.has(tc.function?.name),
+          );
+          if (hasUnknownTools) {
+            const { tool_calls, ...rest } = m;
+            return rest;
+          }
+        }
+        return m;
+      });
   }
 
   constructor(
@@ -131,7 +172,7 @@ export class AgentGraph {
       try {
         stream = await this.glm.chat.completions.create({
           model: this.model,
-          messages: this.sanitizeMessages(messages) as any,
+          messages: this.sanitizeForApi(messages, AGENT_CONFIGS.planner.tools) as any,
           tools: AGENT_CONFIGS.planner.tools as any,
           tool_choice: 'auto',
           max_tokens: 4096,
@@ -322,7 +363,7 @@ export class AgentGraph {
 
       const currentMessages = [
         { role: 'system', content: agentConfig.systemPrompt },
-        ...state.messages,
+        ...this.sanitizeForApi(state.messages, agentConfig.tools),
       ];
 
       const allNewMessages: any[] = [];
@@ -332,7 +373,7 @@ export class AgentGraph {
       for (let loop = 0; loop < maxLoops; loop++) {
         const stream = (await this.glm.chat.completions.create({
           model: this.model,
-          messages: this.sanitizeMessages(currentMessages) as any,
+          messages: this.sanitizeForApi(currentMessages, agentConfig.tools) as any,
           tools: agentConfig.tools as any,
           tool_choice: 'auto',
           max_tokens: 4096,
@@ -574,10 +615,20 @@ export class AgentGraph {
       const agentConfig = AGENT_CONFIGS[state.currentAgent];
 
       if (state.currentAgent !== 'planner') {
-        state.messages.unshift({
-          role: 'system',
-          content: agentConfig.systemPrompt,
-        });
+        const sysIdx = state.messages.findIndex(
+          (m) => m.role === 'system',
+        );
+        if (sysIdx !== -1) {
+          state.messages[sysIdx] = {
+            role: 'system',
+            content: agentConfig.systemPrompt,
+          };
+        } else {
+          state.messages.unshift({
+            role: 'system',
+            content: agentConfig.systemPrompt,
+          });
+        }
       }
 
       try {
@@ -618,7 +669,7 @@ export class AgentGraph {
   ): Promise<boolean> {
     const stream = (await this.glm.chat.completions.create({
       model: this.model,
-      messages: this.sanitizeMessages(state.messages) as any,
+      messages: this.sanitizeForApi(state.messages, agentConfig.tools) as any,
       tools: agentConfig.tools,
       tool_choice: 'auto',
       max_tokens: 4096,
