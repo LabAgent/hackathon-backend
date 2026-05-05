@@ -127,6 +127,7 @@ export class AgentGraph {
           messages: messages as any,
           tools: AGENT_CONFIGS.planner.tools as any,
           tool_choice: 'auto',
+          max_tokens: 16000,
           stream: true,
         } as any);
         break;
@@ -325,6 +326,7 @@ export class AgentGraph {
           messages: currentMessages as any,
           tools: agentConfig.tools as any,
           tool_choice: 'auto',
+          max_tokens: 16000,
           stream: true,
         } as any)) as any;
 
@@ -610,6 +612,7 @@ export class AgentGraph {
       messages: state.messages as any,
       tools: agentConfig.tools,
       tool_choice: 'auto',
+      max_tokens: 16000,
       stream: true,
     } as any)) as any;
 
