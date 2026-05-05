@@ -320,11 +320,10 @@ export class AgentGraph {
         message: `${agentConfig.name} Agent working...`,
       });
 
-      const currentMessages = [...state.messages];
-      currentMessages.push({
-        role: 'system',
-        content: agentConfig.systemPrompt,
-      });
+      const currentMessages = [
+        { role: 'system', content: agentConfig.systemPrompt },
+        ...state.messages,
+      ];
 
       const allNewMessages: any[] = [];
       const allNewSteps: any[] = [];
@@ -575,7 +574,7 @@ export class AgentGraph {
       const agentConfig = AGENT_CONFIGS[state.currentAgent];
 
       if (state.currentAgent !== 'planner') {
-        state.messages.push({
+        state.messages.unshift({
           role: 'system',
           content: agentConfig.systemPrompt,
         });
