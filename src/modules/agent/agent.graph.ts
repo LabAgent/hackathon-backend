@@ -147,18 +147,32 @@ export class AgentGraph {
       message: 'Planner Agent analyzing your request...',
     });
 
-    const messages = [...state.messages];
-    if (messages.length === 0) {
+    const messages: any[] = [];
+    if (state.messages.length === 0) {
       messages.push({
         role: 'system',
         content: AGENT_CONFIGS.planner.systemPrompt,
       });
       messages.push({ role: 'user', content: state.query });
     } else {
+      const assistantContents = state.messages
+        .filter((m: any) => m.role === 'assistant' && m.content)
+        .map((m: any) => m.content);
+
       messages.push({
         role: 'system',
         content: AGENT_CONFIGS.planner.systemPrompt,
       });
+      messages.push({
+        role: 'user',
+        content: `Original request: ${state.query}`,
+      });
+      if (assistantContents.length > 0) {
+        messages.push({
+          role: 'assistant',
+          content: assistantContents.join('\n\n'),
+        });
+      }
       messages.push({
         role: 'user',
         content:
@@ -182,6 +196,9 @@ export class AgentGraph {
       } catch (err: any) {
         lastError = err;
         this.logger.warn(`Planner API attempt ${attempt + 1} failed: ${err.message}`);
+        if (err.error) {
+          this.logger.warn(`Provider error detail: ${JSON.stringify(err.error)}`);
+        }
         if (attempt < 2) {
           await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
         }
@@ -614,7 +631,27 @@ export class AgentGraph {
       iterations++;
       const agentConfig = AGENT_CONFIGS[state.currentAgent];
 
-      if (state.currentAgent !== 'planner') {
+      if (state.currentAgent === 'planner' && iterations > 1) {
+        const assistantContents = state.messages
+          .filter((m: any) => m.role === 'assistant' && m.content)
+          .map((m: any) => m.content);
+
+        state.messages = [
+          { role: 'system', content: AGENT_CONFIGS.planner.systemPrompt },
+          { role: 'user', content: `Original request: ${query}` },
+        ];
+        if (assistantContents.length > 0) {
+          state.messages.push({
+            role: 'assistant',
+            content: assistantContents.join('\n\n'),
+          });
+        }
+        state.messages.push({
+          role: 'user',
+          content:
+            'The specialist agent has completed its work. Please synthesize the results and provide a clear response to the user.',
+        });
+      } else if (state.currentAgent !== 'planner') {
         const sysIdx = state.messages.findIndex(
           (m) => m.role === 'system',
         );
