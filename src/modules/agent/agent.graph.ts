@@ -42,6 +42,13 @@ export class AgentGraph {
   private readonly model: string;
   private compiledGraph: any;
 
+  private sanitizeMessages(messages: any[]): any[] {
+    return messages.map((m) => {
+      const { reasoning_content, ...rest } = m;
+      return rest;
+    });
+  }
+
   constructor(
     private toolExecutor: ToolExecutor,
     private configService: ConfigService,
@@ -124,10 +131,10 @@ export class AgentGraph {
       try {
         stream = await this.glm.chat.completions.create({
           model: this.model,
-          messages: messages as any,
+          messages: this.sanitizeMessages(messages) as any,
           tools: AGENT_CONFIGS.planner.tools as any,
           tool_choice: 'auto',
-          max_tokens: 16000,
+          max_tokens: 4096,
           stream: true,
         } as any);
         break;
@@ -244,7 +251,10 @@ export class AgentGraph {
         });
 
         return {
-          messages: newMessages,
+          messages: [
+            { role: 'user', content: state.query },
+            ...newMessages,
+          ],
           finalResponse: '',
           currentAgent: targetAgent,
           agentSteps: newSteps,
@@ -323,10 +333,10 @@ export class AgentGraph {
       for (let loop = 0; loop < maxLoops; loop++) {
         const stream = (await this.glm.chat.completions.create({
           model: this.model,
-          messages: currentMessages as any,
+          messages: this.sanitizeMessages(currentMessages) as any,
           tools: agentConfig.tools as any,
           tool_choice: 'auto',
-          max_tokens: 16000,
+          max_tokens: 4096,
           stream: true,
         } as any)) as any;
 
@@ -609,10 +619,10 @@ export class AgentGraph {
   ): Promise<boolean> {
     const stream = (await this.glm.chat.completions.create({
       model: this.model,
-      messages: state.messages as any,
+      messages: this.sanitizeMessages(state.messages) as any,
       tools: agentConfig.tools,
       tool_choice: 'auto',
-      max_tokens: 16000,
+      max_tokens: 4096,
       stream: true,
     } as any)) as any;
 
