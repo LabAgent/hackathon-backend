@@ -420,5 +420,3 @@ LOCK_TIME_MINUTES=30
 Swagger UI is available at `http://localhost:3000/api/docs` in development mode.
 
 ---
-
-*built for CodeItUp 6.0 — "I'm ready! I'm ready!"* 🧽
